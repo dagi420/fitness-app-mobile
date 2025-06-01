@@ -19,7 +19,9 @@ A React Native and Expo mobile application designed for a gym company, enabling 
     *   Manual timer controls (start/resume, pause, reset).
     *   Tracks current set and progresses through exercises.
     *   Placeholder for exercise visuals (image/video).
-*   **Progress Tracking (Future):** Infrastructure planned for tracking user progress.
+*   **Progress Tracking:**
+    *   Track weight and body measurements over time with a calendar view.
+    *   **Progress Photo Tracking:** Users can upload and view photos associated with their progress log entries to visually track changes.
 *   **Profile Management:** View user profile information and logout.
 *   **Intuitive UI:** Organized navigation with a bottom tab bar and a central "Create Plan" button.
 *   **Clear Data Flow:** Uses React Context for global state management (e.g., authentication) and services for API interactions.
@@ -40,8 +42,11 @@ fitness-app-mobile/
 │   ├── api/                  # API service files for interacting with the backend
 │   │   ├── apiConfig.ts
 │   │   ├── authService.ts
+│   │   ├── dietService.ts
 │   │   ├── exerciseService.ts
+│   │   ├── foodService.ts
 │   │   ├── planService.ts
+│   │   ├── progressService.ts
 │   │   └── workoutService.ts
 │   ├── assets/               # Static assets (images, fonts)
 │   ├── components/           # Reusable UI components (shared across screens)
@@ -70,7 +75,9 @@ fitness-app-mobile/
 │   │   ├── Profile/
 │   │   │   └── ProfileScreen.tsx
 │   │   ├── Progress/
-│   │   │   └── ProgressScreen.tsx
+│   │   │   ├── ProgressHistoryScreen.tsx
+│   │   │   ├── ProgressLogEntryScreen.tsx
+│   │   │   └── PhotoViewerScreen.tsx
 │   │   └── Workouts/
 │   │       ├── ActiveWorkoutScreen.tsx
 │   │       ├── WorkoutDetailScreen.tsx
@@ -127,9 +134,11 @@ Before you begin, ensure you have the following installed:
         MONGODB_URI=your_mongodb_connection_string
         DB_NAME=your_database_name
         PORT=3000
-        # Add any other JWT secrets or API keys if implemented later
+        JWT_SECRET=your_jwt_secret_key_here # Make sure to add a strong secret for JWT
+        GEMINI_API_KEY=your_google_gemini_api_key # If using Gemini for AI features
         ```
     *   Ensure your MongoDB server is running and accessible.
+    *   The server will automatically attempt to create a `public/uploads/progress_photos` directory if it doesn't exist, for storing uploaded progress photos.
 
 ## Running the Application
 
@@ -159,7 +168,21 @@ Before you begin, ensure you have the following installed:
 The mobile app connects to the backend API. The base URL for the API is configured in:
 `fitness-app-mobile/src/api/apiConfig.ts`
 
-Ensure the `API_BASE_URL` in this file points to your running backend server (e.g., `http://<YOUR_LOCAL_NETWORK_IP>:3000/api` if running on a physical device, or `http://localhost:3000/api` for simulators).
+Ensure the `API_BASE_URL` in this file points to your running backend server (e.g., `http://<YOUR_LOCAL_NETWORK_IP>:3000` if running on a physical device, or `http://localhost:3000` for simulators – note the `/api` prefix is usually part of specific service calls, not the base URL itself, check your `apiConfig.ts`).
+
+### Key API Endpoints for Progress Tracking
+
+The following endpoints are available on the backend server for managing progress logs:
+
+*   **`POST /api/progress`**: Add a new progress log (weight, measurements). Requires JWT token.
+    *   Body: `{ date: string (ISO), weightKg: number, bodyFatPercentage?: number, measurements?: object }`
+*   **`GET /api/progress/user/:userId`**: Get all progress logs for a specific user. Requires JWT token. The `:userId` in the path must match the user ID from the token.
+*   **`PUT /api/progress/:logId`**: Update an existing progress log. Requires JWT token.
+    *   Body: `{ date?: string, weightKg?: number, bodyFatPercentage?: number, measurements?: object, photoUrls?: string[] }`
+    *   *Note: Full update of `photoUrls` (for removing specific existing photos during an edit) via this endpoint is a future enhancement on the backend.*
+*   **`DELETE /api/progress/:logId`**: Delete a progress log and its associated photos. Requires JWT token.
+*   **`POST /api/progress/:logId/photos`**: Upload photos for a specific progress log. Requires JWT token.
+    *   Accepts `FormData` with field `progressPhotos` (up to 5 images: jpg, jpeg, png, gif; max 5MB each).
 
 ## Key Technologies Used
 
@@ -170,10 +193,12 @@ Ensure the `API_BASE_URL` in this file points to your running backend server (e.
     *   React Navigation (for routing and navigation)
     *   React Context (for global state management)
     *   `expo-secure-store` (for secure storage of tokens)
+    *   `expo-image-picker` (for selecting photos from device library)
 *   **Backend Server:**
     *   Node.js
     *   Express.js
     *   MongoDB (with `mongodb` Node.js driver)
+    *   `multer` (for handling file uploads)
     *   `bcryptjs` (for password hashing)
     *   `cors` (for Cross-Origin Resource Sharing)
     *   `dotenv` (for environment variables)
@@ -194,10 +219,26 @@ In the `fitness-app-server` directory:
 *   `node server.js`: Starts the backend server.
 *   Consider adding a script for `nodemon server.js` in `fitness-app-server/package.json` for easier development.
 
+## Permissions
+
+*   **iOS (Photo Library):** To allow users to upload progress photos, ensure you have added the necessary permission description to your `fitness-app-mobile/app.json` under the `expo.ios.infoPlist` (or `expo.plugins` for `expo-image-picker` config plugin) section for `NSPhotoLibraryUsageDescription`. For example, when using the `expo-image-picker` plugin:
+    ```json
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos so you can upload progress pictures."
+        }
+      ]
+      // ... other plugins
+    ]
+    ```
+
 ## Future Enhancements / To-Do
 
 *   Implement AI-powered workout and diet planning.
-*   Complete Progress Tracking functionality (save workout session results).
+*   Complete other aspects of Progress Tracking functionality (e.g., save workout session results, track performance metrics).
+*   Enhance the backend `PUT /api/progress/:logId` endpoint to fully support removal of specific existing photos during an edit operation by processing the `photoUrls` array.
 *   Build out the Diet Plan section.
 *   Enhance Active Workout Session screen (exercise image/video display, sound notifications for timer, workout summary page).
 *   Add functionality to share plans with peers.
@@ -205,6 +246,7 @@ In the `fitness-app-server` directory:
 *   Unit and integration tests.
 *   Refine UI/UX across the application.
 *   Error handling and reporting improvements.
+*   Address `expo-av` deprecation warning if its functionality is in use or becomes needed.
 
 ## Contributing
 

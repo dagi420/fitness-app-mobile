@@ -23,6 +23,10 @@ import ManualDietPlannerScreen from '../screens/Diet/ManualDietPlannerScreen'; /
 import FoodItemPickerScreen from '../screens/Food/FoodItemPickerScreen'; // Import FoodItemPickerScreen
 import AIConfigurationScreen from '../screens/AI/AIConfigurationScreen'; // Import AIConfigurationScreen
 import AIWorkoutConfigurationScreen from '../screens/AI/AIWorkoutConfigurationScreen'; // Import new screen
+// Import Progress Screens
+import ProgressHistoryScreen from '../screens/Progress/ProgressHistoryScreen';
+import ProgressLogEntryScreen from '../screens/Progress/ProgressLogEntryScreen';
+import PhotoViewerScreen from '../screens/Progress/PhotoViewerScreen'; // Import PhotoViewerScreen
 // import UserDetailsScreen from '../screens/Onboarding/UserDetailsScreen'; // We'll handle navigation to this from GoalSelectionScreen
 
 // Remove MainAppPlaceholder or comment it out
@@ -123,6 +127,33 @@ const AppNavigator = () => {
                     presentation: 'modal', 
                     headerShown: true
                   }}
+                />
+                {/* Progress Tracking Screens */}
+                <Stack.Screen 
+                  name="ProgressHistory" 
+                  component={ProgressHistoryScreen} 
+                  options={{ 
+                    headerShown: true, 
+                    title: 'Progress History' 
+                  }} 
+                />
+                <Stack.Screen 
+                  name="ProgressLogEntry" 
+                  component={ProgressLogEntryScreen} 
+                  options={{ 
+                    headerShown: true, 
+                    title: 'Log Progress', // Title can be dynamic if editing, handled in screen itself
+                    presentation: 'modal', // Good for focused entry
+                  }} 
+                />
+                <Stack.Screen 
+                  name="PhotoViewer" 
+                  component={PhotoViewerScreen} 
+                  options={{ 
+                    headerShown: true, 
+                    title: 'View Photos', 
+                    presentation: 'modal', // Optional: can be a normal screen too
+                  }} 
                 />
               </>
             ) : (

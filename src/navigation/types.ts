@@ -4,6 +4,7 @@ import { BaseExercise } from '../screens/Planner/ManualPlanCreatorScreen';
 import { DisplayableWorkoutPlan } from '../screens/Workouts/WorkoutListScreen';
 import { FoodItem } from '../api/dietService';
 import { UserWorkoutPlan } from '../api/planService';
+import { ProgressLog } from '../api/progressService';
 
 export interface AIPlanConfigData {
   goal: string;
@@ -56,6 +57,9 @@ export type RootStackParamList = {
   MainTabParamList: NavigatorScreenParams<MainTabParamList>;
   AIOnboarding: undefined;
   AIGeneration: { planType: 'workout' | 'diet' };
+  ProgressLogEntry: ProgressLogEntryScreenParams | undefined;
+  ProgressHistory: undefined;
+  PhotoViewer: { photoUrls: string[]; logDate?: string; };
 };
 
 export type MainTabParamList = {
@@ -111,4 +115,9 @@ export type AIPlanStackParamList = {
   AIGeneration: { planType: 'workout' | 'diet' };
   AIWorkoutConfigurationScreen: { onSubmit: (config: AIWorkoutConfigData) => void };
   AIDietConfigurationScreen: { onSubmit: (config: AIDietConfigData) => void };
+};
+
+export type ProgressLogEntryScreenParams = {
+  logToEditId?: string;
+  existingLogData?: ProgressLog;
 }; 

@@ -4,6 +4,9 @@ const { MongoClient, ObjectId } = require('mongodb');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const jwt = require('jsonwebtoken'); // Import jsonwebtoken
+const multer = require('multer'); // For handling file uploads
+const path = require('path'); // For working with file paths
+const fs = require('fs'); // For file system operations
 // const { OpenAI } = require('openai'); // Comment out or remove OpenAI/DeepSeek client
 const { GoogleGenAI, HarmCategory, HarmBlockThreshold } = require('@google/genai'); // Corrected import based on module inspection
 
@@ -18,6 +21,44 @@ app.use(express.json()); // To parse JSON request bodies
 const mongoUri = process.env.MONGODB_URI;
 const dbName = process.env.DB_NAME;
 let db;
+
+// Ensure the upload directory exists
+const uploadDir = path.join(__dirname, 'public/uploads/progress_photos');
+if (!fs.existsSync(path.join(__dirname, 'public'))){
+    fs.mkdirSync(path.join(__dirname, 'public'), { recursive: true });
+}
+if (!fs.existsSync(uploadDir)){
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Multer storage configuration
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    // Create a unique filename: fieldname-timestamp.extension
+    cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+  }
+});
+
+// Multer upload instance with file filter for images
+const upload = multer({ 
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    // Accept images only
+    if (!file.originalname.match(/\\.(jpg|jpeg|png|gif)$/i)) {
+        req.fileValidationError = 'Only image files (jpg, jpeg, png, gif) are allowed!';
+        return cb(null, false); // Reject file
+    }
+    cb(null, true); // Accept file
+  },
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB file size limit
+});
+
+// Serve static files from the 'public' directory
+// This will make files in public/uploads/progress_photos accessible via URLs like /uploads/progress_photos/filename.jpg
+app.use('/public', express.static(path.join(__dirname, 'public')));
 
 MongoClient.connect(mongoUri)
   .then(client => {
@@ -1370,6 +1411,361 @@ app.post('/api/ai/generate-workout-plan', verifyToken, async (req, res) => {
   } catch (error) {
     console.error('[AI Workout] Error generating AI workout plan:', error);
     res.status(500).json({ success: false, message: 'Server error during AI workout plan generation.', errorDetails: error.toString() });
+  }
+});
+
+// --- Progress Log Schemas and Models (Conceptual - Mongoose would handle this) ---
+// For a non-Mongoose setup, you'd just structure your objects like this.
+// interface ProgressMeasurement {
+//   chestCm?: number;
+//   waistCm?: number;
+//   hipsCm?: number;
+//   leftArmCm?: number;
+//   rightArmCm?: number;
+//   leftThighCm?: number;
+//   rightThighCm?: number;
+//   notes?: string;
+// }
+// interface ProgressLog {
+//   _id: ObjectId;
+//   userId: ObjectId;
+//   date: Date; // Stored as ISO string, converted to Date object
+//   weightKg: number;
+//   bodyFatPercentage?: number;
+//   measurements?: ProgressMeasurement;
+//   createdAt: Date;
+//   updatedAt: Date;
+// }
+
+// --- Progress Log API Endpoints ---
+
+// POST /api/progress - Add a new progress log
+app.post('/api/progress', verifyToken, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ success: false, message: 'Database not initialized' });
+  }
+  try {
+    const userIdFromToken = req.user.id; // Get userId from verified token
+    const { date, weightKg, bodyFatPercentage, measurements } = req.body;
+
+    if (!userIdFromToken || !ObjectId.isValid(userIdFromToken)) {
+      return res.status(400).json({ success: false, message: 'Valid User ID not found in token.' });
+    }
+    if (!date || !weightKg) {
+      return res.status(400).json({ success: false, message: 'Date and Weight (kg) are required.' });
+    }
+    if (typeof weightKg !== 'number' || weightKg <= 0) {
+        return res.status(400).json({ success: false, message: 'Invalid weight. Must be a positive number.' });
+    }
+    if (bodyFatPercentage !== undefined && (typeof bodyFatPercentage !== 'number' || bodyFatPercentage < 0 || bodyFatPercentage > 100)) {
+        return res.status(400).json({ success: false, message: 'Invalid body fat percentage.' });
+    }
+    // Add more validation for measurements if needed
+
+    const progressLogsCollection = db.collection('progressLogs');
+    
+    const newLog = {
+      _id: new ObjectId(),
+      userId: new ObjectId(userIdFromToken),
+      date: new Date(date), // Ensure date is stored as a Date object
+      weightKg: parseFloat(weightKg),
+      ...(bodyFatPercentage !== undefined && { bodyFatPercentage: parseFloat(bodyFatPercentage) }),
+      ...(measurements && { measurements: measurements }), // measurements should be an object
+      photoUrls: [], // Initialize with an empty array for photos
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const result = await progressLogsCollection.insertOne(newLog);
+
+    res.status(201).json({
+      success: true,
+      message: 'Progress log added successfully!',
+      logId: result.insertedId,
+      log: newLog
+    });
+
+  } catch (error) {
+    console.error('Error adding progress log:', error);
+    if (error.message && error.message.toLowerCase().includes('objectid')) {
+        return res.status(400).json({ success: false, message: 'Invalid User ID format in token processing.'});
+    }
+    res.status(500).json({ success: false, message: 'Server error adding progress log.', errorDetails: error.toString() });
+  }
+});
+
+// GET /api/progress/user/:userId - Get all progress logs for a user
+// Note: :userId in path is a bit redundant if always using token's userId.
+// Kept for now if you want to allow admins to fetch for others, but verifyToken protects it.
+app.get('/api/progress/user/:userId', verifyToken, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ success: false, message: 'Database not initialized' });
+  }
+  try {
+    const userIdFromToken = req.user.id;
+    const requestedUserId = req.params.userId;
+
+    if (!ObjectId.isValid(requestedUserId) || !ObjectId.isValid(userIdFromToken)) {
+        return res.status(400).json({ success: false, message: 'Invalid User ID format.' });
+    }
+    
+    // Security check: Ensure the token user matches the requested user ID
+    // Or, if you have admin roles, you could allow admins to fetch any user's data.
+    // For now, strict check: user can only fetch their own logs.
+    if (userIdFromToken !== requestedUserId) {
+        return res.status(403).json({ success: false, message: 'Forbidden: You can only fetch your own progress logs.' });
+    }
+
+    const progressLogsCollection = db.collection('progressLogs');
+    const logs = await progressLogsCollection.find({ userId: new ObjectId(requestedUserId) }).sort({ date: -1 }).toArray(); // Sort by date descending
+
+    res.status(200).json({
+      success: true,
+      logs: logs,
+    });
+
+  } catch (error) {
+    console.error('Error fetching user progress logs:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching progress logs.', errorDetails: error.toString() });
+  }
+});
+
+// PUT /api/progress/:logId - Update an existing progress log
+app.put('/api/progress/:logId', verifyToken, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ success: false, message: 'Database not initialized' });
+  }
+  try {
+    const userIdFromToken = req.user.id;
+    const logIdToUpdate = req.params.logId;
+    const { date, weightKg, bodyFatPercentage, measurements } = req.body;
+
+    if (!ObjectId.isValid(logIdToUpdate) || !ObjectId.isValid(userIdFromToken)) {
+      return res.status(400).json({ success: false, message: 'Invalid Log ID or User ID format.' });
+    }
+
+    // Validation for inputs
+    if (!date && weightKg === undefined && bodyFatPercentage === undefined && measurements === undefined) {
+        return res.status(400).json({ success: false, message: 'No data provided for update.' });
+    }
+    if (weightKg !== undefined && (typeof weightKg !== 'number' || weightKg <= 0)) {
+        return res.status(400).json({ success: false, message: 'Invalid weight. Must be a positive number.' });
+    }
+     if (bodyFatPercentage !== undefined && (typeof bodyFatPercentage !== 'number' || bodyFatPercentage < 0 || bodyFatPercentage > 100)) {
+        return res.status(400).json({ success: false, message: 'Invalid body fat percentage.' });
+    }
+
+    const progressLogsCollection = db.collection('progressLogs');
+    
+    // First, ensure the log exists and belongs to the user making the request
+    const existingLog = await progressLogsCollection.findOne({ 
+        _id: new ObjectId(logIdToUpdate), 
+        userId: new ObjectId(userIdFromToken) 
+    });
+
+    if (!existingLog) {
+      return res.status(404).json({ success: false, message: 'Progress log not found or you do not have permission to update it.' });
+    }
+
+    const updateData = {};
+    if (date) updateData.date = new Date(date);
+    if (weightKg !== undefined) updateData.weightKg = parseFloat(weightKg);
+    if (bodyFatPercentage !== undefined) updateData.bodyFatPercentage = parseFloat(bodyFatPercentage);
+    else if (bodyFatPercentage === null) updateData.bodyFatPercentage = null; // Allow clearing it
+    if (measurements) updateData.measurements = measurements; // Overwrites all measurements
+    else if (measurements === null) updateData.measurements = null; // Allow clearing all measurements
+    
+    updateData.updatedAt = new Date();
+
+    if (Object.keys(updateData).length === 1 && updateData.updatedAt) { // Only updatedAt
+         return res.status(400).json({ success: false, message: 'No actual data fields provided for update.' });
+    }
+
+
+    const result = await progressLogsCollection.updateOne(
+      { _id: new ObjectId(logIdToUpdate), userId: new ObjectId(userIdFromToken) },
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      // This case should ideally be caught by the findOne check above, but as a fallback.
+      return res.status(404).json({ success: false, message: 'Progress log not found or permission denied.' });
+    }
+    if (result.modifiedCount === 0 && result.matchedCount === 1) {
+      // Data was the same as existing, or no actual change applied.
+      // Fetch the current log to return.
+       const currentLog = await progressLogsCollection.findOne({ _id: new ObjectId(logIdToUpdate) });
+       return res.status(200).json({ success: true, message: 'No changes applied, data was identical.', log: currentLog });
+    }
+    
+    const updatedLog = await progressLogsCollection.findOne({ _id: new ObjectId(logIdToUpdate) });
+
+    res.status(200).json({
+      success: true,
+      message: 'Progress log updated successfully!',
+      log: updatedLog
+    });
+
+  } catch (error) {
+    console.error('Error updating progress log:', error);
+    res.status(500).json({ success: false, message: 'Server error updating progress log.', errorDetails: error.toString() });
+  }
+});
+
+// DELETE /api/progress/:logId - Delete a progress log
+app.delete('/api/progress/:logId', verifyToken, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ success: false, message: 'Database not initialized' });
+  }
+  try {
+    const userIdFromToken = req.user.id;
+    const logIdToDelete = req.params.logId;
+
+    if (!ObjectId.isValid(logIdToDelete) || !ObjectId.isValid(userIdFromToken)) {
+      return res.status(400).json({ success: false, message: 'Invalid Log ID or User ID format.' });
+    }
+
+    const progressLogsCollection = db.collection('progressLogs');
+    
+    // First, find the log to get photoUrls for deletion from filesystem
+    const logToDeleteDoc = await progressLogsCollection.findOne({
+        _id: new ObjectId(logIdToDelete), 
+        userId: new ObjectId(userIdFromToken)
+    });
+
+    if (!logToDeleteDoc) {
+      return res.status(404).json({ success: false, message: 'Progress log not found or you do not have permission to delete it.' });
+    }
+
+    // Delete the log entry from DB
+    const result = await progressLogsCollection.deleteOne({ 
+        _id: new ObjectId(logIdToDelete), 
+        // userId: new ObjectId(userIdFromToken) // Already confirmed ownership with findOne
+    });
+
+    if (result.deletedCount === 0) {
+      // This shouldn't happen if findOne found it, but as a safeguard
+      return res.status(404).json({ success: false, message: 'Progress log not found during delete operation or permission denied.' });
+    }
+
+    // If log had photos, delete them from the filesystem
+    if (logToDeleteDoc.photoUrls && logToDeleteDoc.photoUrls.length > 0) {
+      logToDeleteDoc.photoUrls.forEach(url => {
+        try {
+          // Client-facing URL is like /uploads/progress_photos/filename.jpg
+          // Server path needs to be relative to __dirname, e.g., public/uploads/progress_photos/filename.jpg
+          const filename = path.basename(url); 
+          const filePath = path.join(uploadDir, filename); // uploadDir is already absolute path to public/uploads/progress_photos
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            console.log(`Deleted photo: ${filePath}`);
+          } else {
+            console.warn(`Photo not found for deletion: ${filePath}`);
+          }
+        } catch (fileError) {
+          console.error(`Error deleting photo file ${url}:`, fileError);
+          // Continue even if a file deletion fails, the DB entry is already gone.
+        }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Progress log and associated photos deleted successfully.'
+    });
+
+  } catch (error) {
+    console.error('Error deleting progress log:', error);
+    res.status(500).json({ success: false, message: 'Server error deleting progress log.', errorDetails: error.toString() });
+  }
+});
+
+// NEW ENDPOINT: POST /api/progress/:logId/photos - Upload photos for a specific progress log
+app.post('/api/progress/:logId/photos', verifyToken, upload.array('progressPhotos', 5), async (req, res) => { // Allows up to 5 photos
+  if (!db) {
+    return res.status(500).json({ success: false, message: 'Database not initialized' });
+  }
+  if (req.fileValidationError) {
+    return res.status(400).json({ success: false, message: req.fileValidationError });
+  }
+
+  try {
+    const userIdFromToken = req.user.id;
+    const logId = req.params.logId;
+
+    if (!ObjectId.isValid(logId) || !ObjectId.isValid(userIdFromToken)) {
+      return res.status(400).json({ success: false, message: 'Invalid Log ID or User ID format.' });
+    }
+
+    const files = req.files;
+    if (!files || files.length === 0) {
+      return res.status(400).json({ success: false, message: 'No photo files were uploaded.' });
+    }
+
+    const progressLogsCollection = db.collection('progressLogs');
+
+    // Check if the log exists and belongs to the user
+    const logEntry = await progressLogsCollection.findOne({
+      _id: new ObjectId(logId),
+      userId: new ObjectId(userIdFromToken)
+    });
+
+    if (!logEntry) {
+      // If log not found, delete uploaded files to prevent orphans
+      if (files && Array.isArray(files)) {
+        files.forEach(file => {
+            try { if (fs.existsSync(file.path)) fs.unlinkSync(file.path); } 
+            catch (e) { console.error("Error deleting orphaned file during upload: ", e); }
+        });
+      }
+      return res.status(404).json({ success: false, message: 'Progress log not found or permission denied.' });
+    }
+
+    // Construct URLs for the uploaded photos (relative to what client will request)
+    // Server serves /public, so URLs should be /uploads/progress_photos/filename.jpg from client perspective
+    const photoUrls = files.map(file => `/uploads/progress_photos/${file.filename}`);
+
+    // Update the log entry with the new photo URLs
+    const result = await progressLogsCollection.updateOne(
+      { _id: new ObjectId(logId) },
+      { $push: { photoUrls: { $each: photoUrls } }, $set: { updatedAt: new Date() } }
+    );
+
+    if (result.modifiedCount === 0) {
+      // This might happen if $push didn't add anything, though unlikely here if files were processed
+      // For safety, clean up files if update didn't modify
+      if (files && Array.isArray(files)) {
+        files.forEach(file => {
+            try { if (fs.existsSync(file.path)) fs.unlinkSync(file.path); }
+            catch (e) { console.error("Error deleting file after failed DB update: ", e); }
+        });
+      }
+      return res.status(500).json({ success: false, message: 'Failed to update progress log with photo URLs.' });
+    }
+    
+    const updatedLog = await progressLogsCollection.findOne({ _id: new ObjectId(logId) });
+
+    res.status(200).json({
+      success: true,
+      message: 'Photos uploaded and linked to progress log successfully!',
+      log: updatedLog
+    });
+
+  } catch (error) {
+    console.error('Error uploading progress photos:', error);
+    // If an error occurs after files are uploaded, attempt to delete them
+    if (req.files && Array.isArray(req.files)) {
+        req.files.forEach(file => {
+            try {
+                if (fs.existsSync(file.path)) {
+                    fs.unlinkSync(file.path);
+                }
+            } catch (cleanupError) {
+                console.error('Error cleaning up uploaded file:', cleanupError);
+            }
+        });
+    }
+    res.status(500).json({ success: false, message: 'Server error uploading photos.', errorDetails: error.toString() });
   }
 });
 

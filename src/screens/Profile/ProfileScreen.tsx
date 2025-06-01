@@ -1,11 +1,17 @@
 import React from 'react';
-import { View, Text, StyleSheet, Button, ScrollView, SafeAreaView, Alert } from 'react-native';
+import { View, Text, StyleSheet, Button, ScrollView, SafeAreaView, Alert, TouchableOpacity } from 'react-native';
 import { useAuth } from '../../store/AuthContext';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../../navigation/types';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
+import { RootStackParamList, MainTabParamList } from '../../navigation/types';
 
-// Define navigation prop type for this screen if needed for other navigations
-// type ProfileScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Profile'>; // Assuming 'Profile' is a route name
+// Define navigation prop type for this screen
+// This allows navigation to other root stack screens from a tab screen
+type ProfileScreenNavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<MainTabParamList, 'Profile'>,
+  StackNavigationProp<RootStackParamList>
+>;
 
 interface ProfileDetailItemProps {
   label: string;
@@ -26,7 +32,7 @@ const ProfileDetailItem: React.FC<ProfileDetailItemProps> = ({ label, value }) =
 
 const ProfileScreen = () => {
   const { user, logout } = useAuth();
-  // const navigation = useNavigation<ProfileScreenNavigationProp>(); // If you need navigation
+  const navigation = useNavigation<ProfileScreenNavigationProp>();
 
   const handleLogout = async () => {
     await logout();
@@ -71,6 +77,17 @@ const ProfileScreen = () => {
               )}
             </>
           )}
+        </View>
+
+        {/* Progress Tracking Section */}
+        <View style={styles.detailsSection}>
+          <Text style={styles.sectionTitle}>Progress Tracking</Text>
+          <TouchableOpacity 
+            style={styles.progressButton}
+            onPress={() => navigation.navigate('ProgressHistory')}
+          >
+            <Text style={styles.progressButtonText}>View Weight & Measurement History</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Placeholder for other sections like App Settings, Help, etc. */}
@@ -151,6 +168,19 @@ const styles = StyleSheet.create({
     color: '#333',
     flexShrink: 1, // Allow text to wrap if long
     textAlign: 'right',
+  },
+  progressButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  progressButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   logoutButtonContainer: {
     marginTop: 20,

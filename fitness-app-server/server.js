@@ -3,6 +3,9 @@ const express = require('express');
 const { MongoClient, ObjectId } = require('mongodb');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
+const jwt = require('jsonwebtoken'); // Import jsonwebtoken
+// const { OpenAI } = require('openai'); // Comment out or remove OpenAI/DeepSeek client
+const { GoogleGenAI, HarmCategory, HarmBlockThreshold } = require('@google/genai'); // Corrected import based on module inspection
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -25,6 +28,27 @@ MongoClient.connect(mongoUri)
     console.error('Could not connect to MongoDB', error);
     process.exit(1); // Exit if DB connection fails
   });
+
+// Initialize Google GenAI client - Commenting out top-level initialization for diagnostic
+// const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
+
+// --- JWT Verification Middleware ---
+const verifyToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+      if (err) {
+        // console.error('JWT verification error:', err.message);
+        return res.status(403).json({ success: false, message: 'Forbidden: Invalid or expired token.' });
+      }
+      req.user = decoded; // Add decoded payload to request object (e.g., req.user.id)
+      next();
+    });
+  } else {
+    res.status(401).json({ success: false, message: 'Unauthorized: No token provided or invalid format.' });
+  }
+};
 
 // --- Routes ---
 
@@ -120,16 +144,21 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     // Login successful
-    // In a real app, you'd generate a JWT token here and send it back
-    // For now, just send user info (excluding password)
+    // Generate a JWT token
+    const token = jwt.sign(
+      { id: user._id.toString() }, // Payload: user's ID
+      process.env.JWT_SECRET,        // Secret key from .env
+      { expiresIn: '1d' }             // Token expiration (e.g., 1 day)
+    );
+
     const userForClient = { ...user };
     delete userForClient.hashedPassword; // IMPORTANT: Never send the hash to the client
 
     res.status(200).json({
       success: true,
       message: 'Login successful!',
+      token: token, // Send the token to the client
       user: userForClient,
-      token: '15a79114a402df571616fad89eecb70f89c2fa4a969584f2c2e66f37a636a21da1c0f8c193b1c399b74d753d7056ea580937b530325d00582c62eda3b3a1cc815d355281ea1177e92ad69adcd76e7b55ba934b89c570966ac53b480a774f35345c79db3abb0c2ccec155fc859b45f5b02ee4d27a69d570729f77b19a4a0d87f1abafb36d6fd8aa2f508adfb6185de77827a26e94963f742c44d62633229978ec47b6347b4ba7f81a39689b17f31ce8975f45f0b496b12e809367b81de9c47066d2988fda807c29d6e0d0ba2f4f8dad9a172996fcad9c4181d15655a8cbd7d650adbdbccb2d525d238a1caa1d1528e9871a2a4bfabc7bb321fa1c5bafba271d24d221c4013ffb194b8045f73040a1437b4ea685c7b008eb7391815e72a6a3244639efdb14c30d007cf8de52a3bb30f91299ded181364ec9c65a4b52212af60007ba2a2ef88dad47074738b5adf8a72b6118f122c8d6acf3ab7fb627f06a9bc2ffabe0f243b2800c54c0fb0251ebb8aabbfab71fced0f56351f79606107f146dbe78164f8c910e68780eecebda0b0bdb895957274985f162d8d5127119f3cc47842d8f403c7951b47b61c56fb3941e64bca68ae6c80dbe953e9510849154f9e9df2944562a5f6bd345ac2bbd5a2f97936f31ceaeb3946a3579b94a63639e996287' // Example for future
     });
 
   } catch (error) {
@@ -236,6 +265,62 @@ app.get('/api/workouts', async (req, res) => {
     let workouts = await workoutsCollection.find({}).toArray();
     if (workouts.length === 0) {
         console.log('No workouts found in DB, inserting mock data...');
+
+        // Define some detailed mock exercises to be reused in workouts
+        const mockSquat = {
+            _id: new ObjectId("60f1c7d0e8b7a83a4c8e0f01"), // Fixed ObjectId for consistency if referenced elsewhere
+            name: 'Barbell Squat',
+            description: 'A compound exercise that works multiple muscle groups in the lower body and core.',
+            muscleGroups: ['Quadriceps', 'Glutes', 'Hamstrings', 'Core'],
+            equipment: 'Barbell, Squat Rack',
+            difficulty: 'Intermediate',
+            type: 'Strength',
+            category: 'Lower Body',
+            instructions: [
+                'Stand with your feet shoulder-width apart, barbell on upper back.',
+                'Keep chest up, back straight, lower hips as if sitting.',
+                'Descend until thighs are parallel to floor.',
+                'Push through heels to return to start.'
+            ],
+            imageUrl: 'https://via.placeholder.com/300x200.png?text=Barbell+Squat',
+            videoUrl: 'https://www.youtube.com/watch?v=placeholder_squat_video'
+        };
+
+        const mockPushup = {
+            _id: new ObjectId("60f1c7d0e8b7a83a4c8e0f02"),
+            name: 'Push-up',
+            description: 'A classic bodyweight exercise for upper body strength.',
+            muscleGroups: ['Chest', 'Shoulders', 'Triceps', 'Core'],
+            equipment: 'None (Bodyweight)',
+            difficulty: 'Beginner',
+            type: 'Strength',
+            category: 'Upper Body',
+            instructions: [
+                'High plank position, hands slightly wider than shoulders.',
+                'Lower body until chest nearly touches floor.',
+                'Push back to start, core engaged.'
+            ],
+            imageUrl: 'https://via.placeholder.com/300x200.png?text=Push-up',
+            videoUrl: 'https://www.youtube.com/watch?v=placeholder_pushup_video'
+        };
+        
+        const mockPlank = {
+            _id: new ObjectId("60f1c7d0e8b7a83a4c8e0f03"),
+            name: 'Plank',
+            description: 'Isometric core exercise.',
+            muscleGroups: ['Core', 'Abdominals'],
+            equipment: 'None (Bodyweight)',
+            difficulty: 'Beginner',
+            type: 'Core',
+            category: 'Core',
+            instructions: [
+                'Prop on forearms and toes, body straight.',
+                'Engage core, hold position.'
+            ],
+            imageUrl: 'https://via.placeholder.com/300x200.png?text=Plank'
+            // No video for plank
+        };
+
         const mockWorkouts = [
             { 
                 _id: new ObjectId(), 
@@ -244,10 +329,23 @@ app.get('/api/workouts', async (req, res) => {
                 type: 'Full Body', 
                 difficulty: 'Intermediate', 
                 durationEstimateMinutes: 60,
-                exercises: [ // Simplified exercise list for now
-                    { exerciseName: 'Squats', sets: 3, reps: '8-12' },
-                    { exerciseName: 'Push-ups', sets: 3, reps: 'As many as possible' },
-                    { exerciseName: 'Rows', sets: 3, reps: '10-15' }
+                exercises: [ // Now using full ExerciseDetail objects
+                    { ...mockSquat, sets: 3, reps: '8-12', order: 1 }, // Added sets, reps, order
+                    { ...mockPushup, sets: 3, reps: 'As many as possible', order: 2 },
+                    // Example: Adding another exercise inline for variety
+                    { 
+                        _id: new ObjectId("60f1c7d0e8b7a83a4c8e0f04"),
+                        name: 'Dumbbell Rows', 
+                        description: 'Builds back strength.',
+                        muscleGroups: ['Back', 'Biceps'],
+                        equipment: 'Dumbbells, Bench',
+                        difficulty: 'Intermediate',
+                        type: 'Strength',
+                        category: 'Upper Body',
+                        instructions: ['Lean on bench, pull dumbbell to chest.'],
+                        imageUrl: 'https://via.placeholder.com/300x200.png?text=DB+Rows',
+                        sets: 3, reps: '10-15', order: 3 
+                    }
                 ]
             },
             { 
@@ -258,9 +356,34 @@ app.get('/api/workouts', async (req, res) => {
                 difficulty: 'Beginner', 
                 durationEstimateMinutes: 45,
                 exercises: [
-                    { exerciseName: 'Bench Press', sets: 3, reps: '5-8' },
-                    { exerciseName: 'Pull-ups/Lat Pulldowns', sets: 3, reps: '5-10' },
-                    { exerciseName: 'Overhead Press', sets: 3, reps: '8-12' }
+                    { 
+                        _id: new ObjectId("60f1c7d0e8b7a83a4c8e0f05"),
+                        name: 'Bench Press', 
+                        description: 'Primary chest builder.',
+                        muscleGroups: ['Chest', 'Shoulders', 'Triceps'],
+                        equipment: 'Barbell, Bench',
+                        difficulty: 'Intermediate',
+                        type: 'Strength',
+                        category: 'Upper Body',
+                        instructions: ['Lie on bench, lower bar to chest, press up.'],
+                        imageUrl: 'https://via.placeholder.com/300x200.png?text=Bench+Press',
+                        videoUrl: 'https://www.youtube.com/watch?v=placeholder_bench_video',
+                        sets: 3, reps: '5-8', order: 1 
+                    },
+                    { ...mockPushup, sets: 3, reps: '10-15', order: 2 }, // Reusing push-up
+                    { 
+                        _id: new ObjectId("60f1c7d0e8b7a83a4c8e0f06"),
+                        name: 'Overhead Press', 
+                        description: 'Builds shoulder strength.',
+                        muscleGroups: ['Shoulders', 'Triceps'],
+                        equipment: 'Barbell or Dumbbells',
+                        difficulty: 'Intermediate',
+                        type: 'Strength',
+                        category: 'Upper Body',
+                        instructions: ['Press weight overhead from shoulders.'],
+                        imageUrl: 'https://via.placeholder.com/300x200.png?text=Overhead+Press',
+                        sets: 3, reps: '8-12', order: 3 
+                    }
                 ]
             },
              { 
@@ -271,9 +394,34 @@ app.get('/api/workouts', async (req, res) => {
                 difficulty: 'Advanced', 
                 durationEstimateMinutes: 30,
                 exercises: [
-                    { exerciseName: 'Burpees', sets: 4, reps: '15' },
-                    { exerciseName: 'Plank', sets: 4, reps: '60 seconds' },
-                    { exerciseName: 'Mountain Climbers', sets: 4, reps: '30 seconds' }
+                    { 
+                        _id: new ObjectId("60f1c7d0e8b7a83a4c8e0f07"),
+                        name: 'Burpees', 
+                        description: 'Full body explosive exercise.',
+                        muscleGroups: ['Full Body', 'Cardio'],
+                        equipment: 'None (Bodyweight)',
+                        difficulty: 'Advanced',
+                        type: 'Cardio',
+                        category: 'Cardio',
+                        instructions: ['Squat, kick feet back, push-up, jump feet in, jump up.'],
+                        imageUrl: 'https://via.placeholder.com/300x200.png?text=Burpees',
+                        videoUrl: 'https://www.youtube.com/watch?v=placeholder_burpee_video',
+                        sets: 4, reps: '15', order: 1 
+                    },
+                    { ...mockPlank, sets: 4, durationSeconds: 60, order: 2 }, // Using duration for plank
+                    { 
+                        _id: new ObjectId("60f1c7d0e8b7a83a4c8e0f08"),
+                        name: 'Mountain Climbers', 
+                        description: 'Cardio and core.',
+                        muscleGroups: ['Core', 'Cardio', 'Shoulders'],
+                        equipment: 'None (Bodyweight)',
+                        difficulty: 'Intermediate',
+                        type: 'Cardio',
+                        category: 'Cardio',
+                        instructions: ['Plank position, alternate bringing knees to chest.'],
+                        imageUrl: 'https://via.placeholder.com/300x200.png?text=Mountain+Climbers',
+                        sets: 4, durationSeconds: 30, order: 3 // Using duration
+                    }
                 ]
             }
         ];
@@ -335,50 +483,86 @@ app.get('/api/exercises', async (req, res) => {
         const mockExercises = [
             {
                 _id: new ObjectId(), 
-                exerciseName: 'Barbell Squat', 
-                type: 'Strength', 
-                difficulty: 'Intermediate',
-                targetMuscleGroups: ['Quadriceps', 'Glutes', 'Hamstrings', 'Core'],
-                equipmentNeeded: ['Barbell', 'Squat Rack'],
+                name: 'Barbell Squat',
                 description: 'A compound exercise that works multiple muscle groups in the lower body and core. Focus on maintaining good form, keeping your back straight and squatting to at least parallel.',
-                // videoUrl: 'https://example.com/squat_video',
-                // imageUrl: 'https://example.com/squat_image.jpg'
-            },
-            {
-                _id: new ObjectId(), 
-                exerciseName: 'Push-up', 
-                type: 'Strength', 
-                difficulty: 'Beginner',
-                targetMuscleGroups: ['Chest', 'Shoulders', 'Triceps', 'Core'],
-                equipmentNeeded: ['None (Bodyweight)'],
-                description: 'A classic bodyweight exercise that builds upper body strength. Keep your body in a straight line from head to heels.',
-            },
-            {
-                _id: new ObjectId(), 
-                exerciseName: 'Plank', 
-                type: 'Core', 
-                difficulty: 'Beginner',
-                targetMuscleGroups: ['Core', 'Abdominals', 'Obliques'],
-                equipmentNeeded: ['None (Bodyweight)'],
-                description: 'An isometric core strength exercise that involves maintaining a position similar to a push-up for the maximum possible time.',
-            },
-            {
-                _id: new ObjectId(), 
-                exerciseName: 'Dumbbell Bench Press', 
-                type: 'Strength', 
+                muscleGroups: ['Quadriceps', 'Glutes', 'Hamstrings', 'Core'],
+                equipment: 'Barbell, Squat Rack',
                 difficulty: 'Intermediate',
-                targetMuscleGroups: ['Chest', 'Shoulders', 'Triceps'],
-                equipmentNeeded: ['Dumbbells', 'Bench'],
-                description: 'A variation of the bench press using dumbbells, allowing for a greater range of motion and individual arm work.',
+                type: 'Strength',
+                category: 'Lower Body',
+                instructions: [
+                    'Stand with your feet shoulder-width apart, with the barbell resting on your upper back.',
+                    'Keeping your chest up and back straight, lower your hips as if sitting in a chair.',
+                    'Descend until your thighs are at least parallel to the floor.',
+                    'Push through your heels to return to the starting position.'
+                ],
+                imageUrl: 'https://via.placeholder.com/300x200.png?text=Barbell+Squat',
+                videoUrl: 'https://www.youtube.com/watch?v=placeholder_squat_video' 
             },
             {
                 _id: new ObjectId(), 
-                exerciseName: 'Running (Treadmill)', 
-                type: 'Cardio', 
+                name: 'Push-up', 
+                description: 'A classic bodyweight exercise that builds upper body strength. Keep your body in a straight line from head to heels.',
+                muscleGroups: ['Chest', 'Shoulders', 'Triceps', 'Core'],
+                equipment: 'None (Bodyweight)',
                 difficulty: 'Beginner',
-                targetMuscleGroups: ['Legs', 'Cardiovascular System'],
-                equipmentNeeded: ['Treadmill'],
+                type: 'Strength',
+                category: 'Upper Body',
+                instructions: [
+                    'Start in a high plank position with your hands slightly wider than your shoulders.',
+                    'Lower your body until your chest nearly touches the floor.',
+                    'Push back up to the starting position, keeping your core engaged.'
+                ],
+                imageUrl: 'https://via.placeholder.com/300x200.png?text=Push-up',
+                videoUrl: 'https://www.youtube.com/watch?v=placeholder_pushup_video'
+            },
+            {
+                _id: new ObjectId(), 
+                name: 'Plank', 
+                description: 'An isometric core strength exercise that involves maintaining a position similar to a push-up for the maximum possible time.',
+                muscleGroups: ['Core', 'Abdominals', 'Obliques'],
+                equipment: 'None (Bodyweight)',
+                difficulty: 'Beginner',
+                type: 'Core',
+                category: 'Core',
+                instructions: [
+                    'Lie face down and prop yourself up on your forearms and toes, keeping your body in a straight line.',
+                    'Engage your core and hold the position for the desired duration.'
+                ],
+                imageUrl: 'https://via.placeholder.com/300x200.png?text=Plank'
+            },
+            {
+                _id: new ObjectId(), 
+                name: 'Dumbbell Bench Press', 
+                description: 'A variation of the bench press using dumbbells, allowing for a greater range of motion and individual arm work.',
+                muscleGroups: ['Chest', 'Shoulders', 'Triceps'],
+                equipment: 'Dumbbells, Bench',
+                difficulty: 'Intermediate',
+                type: 'Strength',
+                category: 'Upper Body',
+                instructions: [
+                    'Lie on a bench with a dumbbell in each hand at chest level.',
+                    'Push the dumbbells up until your arms are fully extended.',
+                    'Lower the dumbbells slowly back to the starting position.'
+                ],
+                imageUrl: 'https://via.placeholder.com/300x200.png?text=DB+Bench+Press',
+                videoUrl: 'https://www.youtube.com/watch?v=placeholder_db_bench_video'
+            },
+            {
+                _id: new ObjectId(), 
+                name: 'Running (Treadmill)', 
                 description: 'A popular cardiovascular exercise that can be adjusted for various intensity levels.',
+                muscleGroups: ['Legs', 'Cardiovascular System'],
+                equipment: 'Treadmill',
+                difficulty: 'Beginner',
+                type: 'Cardio',
+                category: 'Cardio',
+                instructions: [
+                    'Set the treadmill to your desired speed and incline.',
+                    'Run or jog, maintaining good posture.',
+                    'Cool down with a walk afterwards.'
+                ],
+                imageUrl: 'https://via.placeholder.com/300x200.png?text=Treadmill+Running'
             }
         ];
         await exercisesCollection.insertMany(mockExercises);
@@ -480,6 +664,712 @@ app.get('/api/user/workout-plans', async (req, res) => {
   } catch (error) {
     console.error('Error fetching user workout plans:', error);
     res.status(500).json({ success: false, message: 'Server error fetching user workout plans.' });
+  }
+});
+
+// GET /api/user/diet-plans?userId=:userId - Fetch all diet plans for a specific user
+app.get('/api/user/diet-plans', async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ success: false, message: 'Database not initialized' });
+  }
+  try {
+    const { userId } = req.query; // Get userId from query parameters
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'User ID is required as a query parameter.' });
+    }
+
+    // Validate ObjectId format for userId
+    if (!ObjectId.isValid(userId)) {
+        return res.status(400).json({ success: false, message: 'Invalid User ID format.' });
+    }
+
+    const userDietPlansCollection = db.collection('userDietPlans');
+    let userPlans = await userDietPlansCollection.find({ userId: new ObjectId(userId) }).sort({ createdAt: -1 }).toArray();
+
+    // --- Mock Data if no plans exist (for development) ---
+    if (userPlans.length === 0) {
+      console.log(`No diet plans found for user ${userId}, inserting mock diet plan...`);
+      const mockPlanId = new ObjectId();
+      const mockMealId1 = new ObjectId();
+      const mockMealId2 = new ObjectId();
+      const mockFoodId1 = new ObjectId();
+      const mockFoodId2 = new ObjectId();
+      const mockFoodId3 = new ObjectId();
+
+      const mockDietPlan = {
+        _id: mockPlanId,
+        userId: new ObjectId(userId),
+        planName: 'Balanced Lifestyle Diet (Mock)',
+        description: 'A sample diet plan focusing on balanced macronutrients for a healthy lifestyle.',
+        dailyCaloricTarget: 2200,
+        macronutrientTargets: { proteinGr: 150, carbsGr: 250, fatGr: 70 },
+        meals: [
+          {
+            _id: mockMealId1,
+            mealName: 'Breakfast',
+            timeSuggestion: '08:00',
+            foodItems: [
+              {
+                _id: mockFoodId1,
+                foodName: 'Oatmeal',
+                quantity: '1 cup cooked',
+                calories: 300,
+                macronutrients: { proteinGr: 10, carbsGr: 55, fatGr: 5 }
+              },
+              {
+                _id: mockFoodId2,
+                foodName: 'Berries',
+                quantity: '1/2 cup',
+                calories: 40,
+                macronutrients: { proteinGr: 1, carbsGr: 10, fatGr: 0 }
+              }
+            ]
+          },
+          {
+            _id: mockMealId2,
+            mealName: 'Lunch',
+            timeSuggestion: '13:00',
+            foodItems: [
+              {
+                _id: mockFoodId3,
+                foodName: 'Grilled Chicken Salad',
+                quantity: 'Large bowl',
+                calories: 550,
+                macronutrients: { proteinGr: 50, carbsGr: 30, fatGr: 25 }
+              }
+            ]
+          }
+          // Add more mock meals (Snack, Dinner) if desired
+        ],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isAIGenerated: false,
+      };
+      await userDietPlansCollection.insertOne(mockDietPlan);
+      userPlans = [mockDietPlan]; // Return the newly inserted mock plan
+    }
+    // --- End Mock Data ---
+
+    res.status(200).json({
+      success: true,
+      plans: userPlans,
+    });
+
+  } catch (error) {
+    console.error('Error fetching user diet plans:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching user diet plans.' });
+  }
+});
+
+// POST /api/user/diet-plans - Create a new diet plan for a user
+app.post('/api/user/diet-plans', async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ success: false, message: 'Database not initialized' });
+  }
+  try {
+    const { userId, planName, meals } = req.body;
+
+    // Basic validation
+    if (!userId || !planName || !meals) {
+      return res.status(400).json({ success: false, message: 'User ID, plan name, and meals are required.' });
+    }
+    if (!Array.isArray(meals) || meals.length === 0) {
+      return res.status(400).json({ success: false, message: 'Meals must be a non-empty array.' });
+    }
+    if (typeof planName !== 'string' || planName.trim() === '') {
+        return res.status(400).json({ success: false, message: 'Plan name must be a non-empty string.' });
+    }
+
+    // Ensure user exists (optional, but good practice)
+    const usersCollection = db.collection('users');
+    const userExists = await usersCollection.findOne({ _id: new ObjectId(userId) });
+    if (!userExists) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    const userDietPlansCollection = db.collection('userDietPlans');
+    
+    const newPlan = {
+      _id: new ObjectId(),
+      userId: new ObjectId(userId),
+      planName: planName.trim(),
+      meals: meals, // These are Meal objects from the client
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isAIGenerated: false, // Mark as manually created
+    };
+
+    const result = await userDietPlansCollection.insertOne(newPlan);
+
+    res.status(201).json({
+      success: true,
+      message: 'Diet plan saved successfully!',
+      planId: result.insertedId,
+      plan: newPlan // Send back the created plan
+    });
+
+  } catch (error) {
+    console.error('Error saving diet plan:', error);
+    if (error.message && error.message.toLowerCase().includes('objectid')) {
+        return res.status(400).json({ success: false, message: 'Invalid User ID format.'});
+    }
+    res.status(500).json({ success: false, message: 'Server error saving diet plan.', error: error.message });
+  }
+});
+
+// POST /api/ai/generate-diet-plan - Generate a diet plan using AI
+app.post('/api/ai/generate-diet-plan', verifyToken, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ success: false, message: 'Database not initialized' });
+  }
+
+  try {
+    // DIAGNOSTIC: Inspect the GoogleGenAI constructor and the instance it creates
+    console.log("[AI Diet] typeof GoogleGenAI (from require):", typeof GoogleGenAI);
+    console.log("[AI Diet] GoogleGenAI constructor function itself:", GoogleGenAI.toString().substring(0, 200) + "..."); // Log first 200 chars
+
+    console.log("[AI Diet] Initializing GoogleGenAI client inside route handler...");
+    const localGenAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
+    console.log("[AI Diet] localGenAI initialized.");
+
+    console.log("[AI Diet] typeof localGenAI after new:", typeof localGenAI);
+    // Attempt to list keys of the instance. If it's not a proper object, this might fail or be empty.
+    try {
+      console.log("[AI Diet] Keys of localGenAI instance:", Object.keys(localGenAI));
+    } catch (keysError) {
+      console.error("[AI Diet] Error getting keys of localGenAI:", keysError);
+    }
+    console.log("[AI Diet] localGenAI instance direct log:", localGenAI);
+
+    const userIdFromToken = req.user.id;
+    const { config } = req.body; // AIPlanConfigData from client
+
+    if (!userIdFromToken || !ObjectId.isValid(userIdFromToken)) {
+      return res.status(400).json({ success: false, message: 'Valid User ID not found in token.' });
+    }
+    if (!config || typeof config.goal !== 'string') {
+      return res.status(400).json({ success: false, message: 'Valid AI configuration data is required.' });
+    }
+
+    const actualUserId = new ObjectId(userIdFromToken);
+
+    // 1. Fetch user's profile data
+    const usersCollection = db.collection('users');
+    const user = await usersCollection.findOne({ _id: actualUserId });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    const userProfile = user.profile || {};
+    const userName = user.fullName || 'User';
+
+    console.log(`[AI Diet] Generating plan for ${userName} (ID: ${actualUserId.toHexString()}) with Google Gemini`);
+    console.log(`[AI Diet] Received AI Config:`, JSON.stringify(config, null, 2));
+    console.log(`[AI Diet] User Profile Data:`, JSON.stringify(userProfile, null, 2));
+
+    // 2. Construct a detailed prompt for Gemini
+    // The prompt structure remains largely the same, as we're asking for JSON output.
+    let prompt = `
+You are a helpful AI assistant specialized in creating personalized diet plans.
+Generate a comprehensive 1-day diet plan for a user with the following details:
+Name: ${userName}
+Goal: ${config.goal}
+Approximate Age: ${userProfile.age || 'Not provided'}
+Gender: ${userProfile.gender || 'Not provided'}
+Height: ${userProfile.height ? userProfile.height + ' cm' : 'Not provided'}
+Weight: ${userProfile.weight ? userProfile.weight + ' kg' : 'Not provided'}
+Activity Level: ${userProfile.activityLevel || 'Not provided'}
+Dietary Preferences/Restrictions: ${config.foodPreferences || (userProfile.dietaryRestrictions && userProfile.dietaryRestrictions.join(', ')) || 'None specified'}
+Supplements: ${config.supplements || 'None specified'}
+Other Notes: ${config.otherNotes || 'None'}
+Health Conditions: ${(userProfile.healthConditions && userProfile.healthConditions.join(', ')) || 'None specified'}
+
+The diet plan should:
+- Be named appropriately based on the user's goal (e.g., "Weight Loss Kickstart Plan", "Muscle Gain Fuel Plan").
+- Include a brief description.
+- Specify an estimated daily caloric target (integer) and macronutrient targets (protein, carbs, fat in grams - integers).
+- Be structured into 3-5 meals (e.g., Breakfast, Lunch, Dinner, Snacks).
+- For each meal:
+    - Provide a mealName (e.g., "Morning Energizer", "Post-Workout Refuel").
+    - Optionally, a timeSuggestion (e.g., "08:00").
+    - List 1-3 foodItems.
+    - For each foodItem:
+        - Specify foodName (e.g., "Grilled Chicken Breast", "Brown Rice", "Mixed Berries").
+        - Specify quantity (e.g., "150g", "1 cup cooked", "1/2 cup").
+        - Estimate calories (integer).
+        - Estimate macronutrients: proteinGr, carbsGr, fatGr (all integers).
+
+Please return the entire diet plan as a single JSON object matching the following structure. Do NOT include any explanatory text, markdown formatting (like \\\`\\\`\\\`json), or anything else before or after the JSON object.
+The response should be ONLY the JSON object itself.
+
+Example JSON Structure:
+{
+  "planName": "string",
+  "description": "string",
+  "dailyCaloricTarget": integer,
+  "macronutrientTargets": { "proteinGr": integer, "carbsGr": integer, "fatGr": integer },
+  "meals": [
+    {
+      "mealName": "string",
+      "timeSuggestion": "string" (optional),
+      "foodItems": [
+        {
+          "foodName": "string",
+          "quantity": "string",
+          "calories": integer,
+          "macronutrients": { "proteinGr": integer, "carbsGr": integer, "fatGr": integer }
+        }
+      ]
+    }
+  ]
+}
+
+Ensure all text values are appropriate and helpful for a diet plan.
+Calculate calorie and macronutrient totals for each food item and for the overall daily targets.
+The sum of calories from foodItems in all meals should roughly match the dailyCaloricTarget.
+The sum of macronutrients from foodItems should roughly match the daily macronutrientTargets.
+`;
+
+    console.log("[AI Diet] Sending prompt to Google Gemini API...");
+
+    // 3. Call Google Gemini API
+    console.log("[AI Diet] Inspecting localGenAI object before calling getGenerativeModel:");
+    console.log("[AI Diet] typeof localGenAI (before getGenerativeModel call):", typeof localGenAI);
+    console.log("[AI Diet] localGenAI has getGenerativeModel property:", localGenAI && localGenAI.hasOwnProperty('getGenerativeModel'));
+    console.log("[AI Diet] typeof localGenAI.getGenerativeModel:", localGenAI && typeof localGenAI.getGenerativeModel);
+    
+    const model = localGenAI.getGenerativeModel({ // Use localGenAI for this test
+        model: "gemini-1.5-flash-latest", // Or "gemini-pro" or other suitable model
+        // generationConfig: { responseMimeType: "application/json" } // To enforce JSON output
+    });
+    
+    // Optional: Add safety settings if needed
+    const safetySettings = [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+    ];
+
+    const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        safetySettings,
+        generationConfig: { // Enforce JSON output
+            responseMimeType: "application/json",
+        },
+    });
+
+    const generationResponse = result.response;
+    
+    if (!generationResponse || !generationResponse.candidates || generationResponse.candidates.length === 0) {
+      console.error('[AI Diet] Google Gemini API response content is empty or invalid.', generationResponse);
+      const blockReason = generationResponse?.promptFeedback?.blockReason;
+      const safetyRatings = generationResponse?.promptFeedback?.safetyRatings;
+      let message = 'Google Gemini API failed to generate a plan (empty or invalid response).';
+      if (blockReason) {
+        message += ` Block Reason: ${blockReason}.`;
+      }
+      if (safetyRatings) {
+        message += ` Safety Ratings: ${JSON.stringify(safetyRatings)}.`;
+      }
+      return res.status(500).json({ success: false, message });
+    }
+
+    // Extract the text which should be JSON
+    const aiResponseText = generationResponse.candidates[0].content.parts[0].text;
+
+    console.log('[AI Diet] Received raw response text from Google Gemini API:', aiResponseText);
+
+    // 4. Parse the AI's response (expecting JSON)
+    let parsedPlan;
+    try {
+        // Since we requested "application/json", the response text should be directly parsable.
+        parsedPlan = JSON.parse(aiResponseText);
+    } catch (parseError) {
+      console.error('[AI Diet] Error parsing JSON response from Google Gemini API:', parseError);
+      console.error('[AI Diet] Google Gemini Raw Response Text that failed parsing:', aiResponseText);
+      return res.status(500).json({ success: false, message: 'Google Gemini API generated a plan, but it was not in the expected JSON format. Please try again.', rawResponse: aiResponseText });
+    }
+
+    // 5. Validate and structure the plan for DB insertion (same as before)
+    if (!parsedPlan.planName || !parsedPlan.meals || !Array.isArray(parsedPlan.meals)) {
+      console.error('[AI Diet] Parsed AI plan is missing required fields or has incorrect structure.');
+      return res.status(500).json({ success: false, message: 'Google Gemini API generated a plan, but it is incomplete or structured incorrectly.', parsedPlan });
+    }
+    
+    const finalPlan = {
+      _id: new ObjectId(),
+      userId: actualUserId,
+      planName: parsedPlan.planName,
+      description: parsedPlan.description || '',
+      dailyCaloricTarget: parsedPlan.dailyCaloricTarget || 0,
+      macronutrientTargets: parsedPlan.macronutrientTargets || { proteinGr: 0, carbsGr: 0, fatGr: 0 },
+      meals: parsedPlan.meals.map(meal => ({
+        _id: new ObjectId(),
+        mealName: meal.mealName,
+        timeSuggestion: meal.timeSuggestion,
+        foodItems: meal.foodItems.map(item => ({
+          _id: new ObjectId(),
+          foodName: item.foodName,
+          quantity: item.quantity,
+          calories: item.calories || 0,
+          macronutrients: item.macronutrients || { proteinGr: 0, carbsGr: 0, fatGr: 0 }
+        }))
+      })),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isAIGenerated: true,
+    };
+
+    // 6. Save the AI-generated plan to the database
+    const userDietPlansCollection = db.collection('userDietPlans');
+    const dbResult = await userDietPlansCollection.insertOne(finalPlan);
+
+    console.log(`[AI Diet] Successfully inserted AI plan ${dbResult.insertedId} for user ${actualUserId.toHexString()} using Google Gemini.`);
+
+    res.status(201).json({
+      success: true,
+      message: 'AI diet plan generated and saved successfully using Google Gemini!',
+      plan: finalPlan
+    });
+
+  } catch (error) {
+    console.error('[AI Diet] Error generating AI diet plan with Google Gemini:', error);
+    // Handle specific Google GenAI errors if possible, otherwise generic
+    // The error object from @google/genai might have different properties
+    let errorMessage = 'Server error during AI diet plan generation with Google Gemini.';
+    if (error.message) {
+        errorMessage += ` Details: ${error.message}`;
+    }
+     // If the error object has a more specific message or details, use them
+    if (error.status && error.statusText) { // Common for API errors
+        errorMessage = `Google Gemini API Error: ${error.status} ${error.statusText}. ${error.message || ''}`;
+    } else if (error.message) {
+        errorMessage = `Google Gemini Error: ${error.message}`;
+    }
+
+    res.status(500).json({ success: false, message: errorMessage, errorDetails: error.toString() });
+  }
+});
+
+// POST /api/ai/generate-workout-plan - Generate a workout plan (currently MOCK)
+app.post('/api/ai/generate-workout-plan', verifyToken, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ success: false, message: 'Database not initialized' });
+  }
+
+  try {
+    const userIdFromToken = req.user.id;
+    const { config } = req.body; // AIWorkoutConfigData from client
+
+    if (!userIdFromToken || !ObjectId.isValid(userIdFromToken)) {
+      return res.status(400).json({ success: false, message: 'Valid User ID not found in token.' });
+    }
+    // Basic validation for AIWorkoutConfigData
+    if (!config ||
+        typeof config.fitnessGoal !== 'string' ||
+        typeof config.fitnessLevel !== 'string' ||
+        // typeof config.gender !== 'string' || // Gender can be optional or 'Prefer not to say'
+        typeof config.workoutTypePreferences !== 'string' ||
+        !Array.isArray(config.availableEquipment) || // Changed to array
+        typeof config.timePerSession !== 'number' || config.timePerSession <= 0 ||
+        typeof config.workoutsPerWeek !== 'number' || config.workoutsPerWeek <= 0
+    ) {
+      return res.status(400).json({ success: false, message: 'Valid AI workout configuration data is required. Check all fields, especially availableEquipment as an array.' });
+    }
+
+    const actualUserId = new ObjectId(userIdFromToken);
+
+    // 1. Fetch user's profile data
+    const usersCollection = db.collection('users');
+    const user = await usersCollection.findOne({ _id: actualUserId });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    const userProfile = user.profile || {};
+    const userName = user.fullName || 'User';
+
+    console.log(`[AI Workout] Generating MOCK plan for ${userName} (ID: ${actualUserId.toHexString()})`);
+    console.log(`[AI Workout] Received AI Config:`, JSON.stringify(config, null, 2));
+    console.log(`[AI Workout] User Profile Data:`, JSON.stringify(userProfile, null, 2));
+
+    // 2. Construct a detailed prompt for AI (Placeholder for now)
+    let workoutPrompt = `
+      Generate a workout plan with the following details:
+      User: ${userName}
+      Fitness Goal: ${config.fitnessGoal}
+      Fitness Level: ${config.fitnessLevel}
+      Gender: ${config.gender || 'Not specified'}
+      Preferred Workout Types: ${config.workoutTypePreferences}
+      Available Equipment: ${config.availableEquipment.join(', ')}
+      Time Per Session: ${config.timePerSession} minutes
+      Workouts Per Week: ${config.workoutsPerWeek}
+      Target Muscle Groups: ${(config.targetMuscleGroups && config.targetMuscleGroups.join(', ')) || 'Overall'}
+      Other Notes: ${config.otherNotes || 'None'}
+      User Age: ${userProfile.age || 'N/A'}, Height: ${userProfile.height || 'N/A'} cm, Weight: ${userProfile.weight || 'N/A'} kg
+
+      The plan should be structured as a JSON object with fields:
+      planName (string), description (string), exercises (array).
+      Each exercise in the array should have:
+      _id (ObjectId string), name (string), type (string, e.g., 'Strength'),
+      targetMuscleGroups (string[]), equipment (string or string[]), description (string),
+      sets (string or number), reps (string), durationSeconds (number, optional), order (number).
+      Ensure exercises are appropriate for the user's level and equipment.
+      Provide 3-6 exercises per plan.
+    `;
+    console.log("[AI Workout] Generated Prompt (for future AI use):\\n", workoutPrompt);
+
+    // --- Expanded Mock Exercise Pool ---
+    const allMockExercises = [
+      // Bodyweight - Beginner
+      { _id: new ObjectId(), name: 'Jumping Jacks', description: 'A full-body cardiovascular exercise that involves jumping to a position with the legs spread wide and the hands touching overhead, and then returning to a position with the feet together and the arms at the sides.', type: 'Cardio', category: 'Cardio', difficulty: 'Beginner', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Full Body', 'Cardio'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Bodyweight Squats', description: 'A fundamental lower body exercise that strengthens the quadriceps, glutes, and hamstrings. Focus on keeping your chest up and back straight.', type: 'Strength', category: 'Lower Body', difficulty: 'Beginner', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Quadriceps', 'Glutes'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Wall Push-ups', description: 'An introductory upper body exercise that targets the chest, shoulders, and triceps, performed by pushing against a wall.', type: 'Strength', category: 'Upper Body', difficulty: 'Beginner', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Chest', 'Shoulders', 'Triceps'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Knee Push-ups', description: 'A modified push-up performed on the knees, making it easier to build upper body strength before progressing to standard push-ups.', type: 'Strength', category: 'Upper Body', difficulty: 'Beginner', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Chest', 'Shoulders', 'Triceps'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Plank (from knees)', description: 'A core-strengthening exercise performed by holding a push-up like position on forearms and knees, engaging the abdominal muscles.', type: 'Core', category: 'Core', difficulty: 'Beginner', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Core', 'Abs'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Bird Dog', description: 'A core stability exercise that involves extending one arm and the opposite leg simultaneously while keeping the torso stable. Improves balance and coordination.', type: 'Core', category: 'Core', difficulty: 'Beginner', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Core', 'Back'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Glute Bridges', description: 'An exercise that targets the glutes and hamstrings by lifting the hips off the floor from a supine position.', type: 'Strength', category: 'Lower Body', difficulty: 'Beginner', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Glutes', 'Hamstrings'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Lunges (alternating)', description: 'A lower body exercise that works the quadriceps, glutes, and hamstrings by stepping forward and lowering the hips until both knees are bent at a 90-degree angle.', type: 'Strength', category: 'Lower Body', difficulty: 'Beginner', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Quadriceps', 'Glutes'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Crunches', description: 'A classic abdominal exercise that targets the upper abs by curling the shoulders towards the pelvis.', type: 'Core', category: 'Core', difficulty: 'Beginner', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Abs'], videoUrl: 'placeholder_url' },
+
+
+      // Bodyweight - Intermediate
+      { _id: new ObjectId(), name: 'Standard Push-ups', description: 'A calisthenic exercise performed by raising and lowering the body using the arms. Strengthens chest, shoulders, and triceps.', type: 'Strength', category: 'Upper Body', difficulty: 'Intermediate', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Chest', 'Shoulders', 'Triceps'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Full Plank', description: 'An isometric core strength exercise that involves maintaining a position similar to a push-up for the maximum possible time, engaging abs, back, and shoulders.', type: 'Core', category: 'Core', difficulty: 'Intermediate', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Core', 'Abs'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Burpees (no push-up)', description: 'A full-body exercise used in strength training and as an aerobic exercise. This version omits the push-up component for reduced difficulty.', type: 'Cardio', category: 'Full Body', difficulty: 'Intermediate', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Full Body', 'Cardio'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Jump Squats', description: 'An explosive lower-body exercise that combines a squat with a vertical jump, building power and strength in the legs.', type: 'Strength', category: 'Plyometrics', difficulty: 'Intermediate', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Quadriceps', 'Glutes', 'Calves'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Mountain Climbers', description: 'A dynamic, full-body exercise that mimics the motion of climbing. It builds cardio endurance, core strength, and agility.', type: 'Cardio', category: 'Core', difficulty: 'Intermediate', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Core', 'Cardio', 'Shoulders'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Tricep Dips (using chair/bench)', description: 'An effective exercise for targeting the triceps, performed by lowering and raising the body using a chair or bench for support.', type: 'Strength', category: 'Upper Body', difficulty: 'Intermediate', equipmentNeeded: ['Bodyweight', 'Chair/Bench'], targetMuscleGroups: ['Triceps', 'Chest'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Walking Lunges', description: 'A variation of the static lunge where you step forward into a lunge with one leg, then bring the back foot forward to meet it, and repeat with the other leg, moving across the floor.', type: 'Strength', category: 'Lower Body', difficulty: 'Intermediate', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Quadriceps', 'Glutes', 'Hamstrings'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Leg Raises', description: 'A core exercise that targets the lower abdominal muscles by lying flat and raising the legs towards the ceiling.', type: 'Core', category: 'Core', difficulty: 'Intermediate', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Lower Abs', 'Hip Flexors'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Russian Twists (bodyweight)', description: 'A core exercise that targets the obliques by sitting with knees bent and torso leaned back, then twisting the torso from side to side.', type: 'Core', category: 'Core', difficulty: 'Intermediate', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Obliques', 'Abs'], videoUrl: 'placeholder_url' },
+
+
+      // Bodyweight - Advanced
+      { _id: new ObjectId(), name: 'Full Burpees (with push-up)', description: 'A challenging full-body exercise combining a squat, push-up, and jump. Excellent for cardiovascular fitness and strength.', type: 'Cardio', category: 'Full Body', difficulty: 'Advanced', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Full Body', 'Cardio', 'Strength'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Pistol Squats (assisted or full)', description: 'A single-leg squat that requires significant strength, balance, and mobility. Can be done assisted or unassisted.', type: 'Strength', category: 'Lower Body', difficulty: 'Advanced', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Quadriceps', 'Glutes', 'Balance'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Pull-ups (if bar available)', description: 'An upper-body compound pulling exercise where the body is suspended by the arms, gripping a bar, and pulled up.', type: 'Strength', category: 'Upper Body', difficulty: 'Advanced', equipmentNeeded: ['Pull-up Bar', 'Bodyweight'], targetMuscleGroups: ['Back', 'Biceps'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Handstand Push-ups (against wall)', description: 'An advanced push-up variation performed in a handstand position, typically against a wall for support. Targets shoulders and triceps.', type: 'Strength', category: 'Upper Body', difficulty: 'Advanced', equipmentNeeded: ['Bodyweight', 'Wall'], targetMuscleGroups: ['Shoulders', 'Triceps'], videoUrl: 'placeholder_url' },
+
+      // Dumbbells - Beginner
+      { _id: new ObjectId(), name: 'Dumbbell Goblet Squat', description: 'A squat variation where a single dumbbell is held vertically against the chest. Excellent for teaching squat form and engaging the core.', type: 'Strength', category: 'Lower Body', difficulty: 'Beginner', equipmentNeeded: ['Dumbbells'], targetMuscleGroups: ['Quadriceps', 'Glutes'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Dumbbell Rows (two arm)', description: 'A back-strengthening exercise performed by pulling dumbbells towards the chest while hinged at the hips. Targets lats and biceps.', type: 'Strength', category: 'Upper Body', difficulty: 'Beginner', equipmentNeeded: ['Dumbbells'], targetMuscleGroups: ['Back', 'Biceps'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Dumbbell Bench Press (floor or bench)', description: 'A chest exercise using dumbbells, which allows for a greater range of motion compared to a barbell. Can be done on a bench or the floor.', type: 'Strength', category: 'Upper Body', difficulty: 'Beginner', equipmentNeeded: ['Dumbbells', 'Bench (optional)'], targetMuscleGroups: ['Chest', 'Shoulders', 'Triceps'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Dumbbell Bicep Curls', description: 'An isolation exercise for the biceps, performed by curling dumbbells up towards the shoulders.', type: 'Strength', category: 'Upper Body', difficulty: 'Beginner', equipmentNeeded: ['Dumbbells'], targetMuscleGroups: ['Biceps'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Dumbbell Overhead Press (seated/standing)', description: 'A shoulder exercise performed by pressing dumbbells overhead. Can be done seated for more stability or standing for core engagement.', type: 'Strength', category: 'Upper Body', difficulty: 'Beginner', equipmentNeeded: ['Dumbbells'], targetMuscleGroups: ['Shoulders', 'Triceps'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Dumbbell Lunges', description: 'Lunges performed while holding dumbbells, adding resistance to this effective lower body exercise for quads, glutes, and hamstrings.', type: 'Strength', category: 'Lower Body', difficulty: 'Beginner', equipmentNeeded: ['Dumbbells'], targetMuscleGroups: ['Quadriceps', 'Glutes', 'Hamstrings'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Dumbbell Romanian Deadlifts (RDLs)', description: 'A hinge movement targeting the hamstrings and glutes, performed by lowering dumbbells towards the floor while keeping legs relatively straight and back flat.', type: 'Strength', category: 'Lower Body', difficulty: 'Beginner', equipmentNeeded: ['Dumbbells'], targetMuscleGroups: ['Hamstrings', 'Glutes', 'Lower Back'], videoUrl: 'placeholder_url' },
+
+      // Dumbbells - Intermediate
+      { _id: new ObjectId(), name: 'Dumbbell Bulgarian Split Squats', description: 'A challenging single-leg squat variation with the rear foot elevated on a bench. Builds strength and stability in the quads and glutes.', type: 'Strength', category: 'Lower Body', difficulty: 'Intermediate', equipmentNeeded: ['Dumbbells', 'Bench'], targetMuscleGroups: ['Quadriceps', 'Glutes'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Dumbbell Renegade Rows', description: 'A compound exercise combining a plank with a dumbbell row, challenging core stability, back, and arm strength.', type: 'Strength', category: 'Full Body', difficulty: 'Intermediate', equipmentNeeded: ['Dumbbells'], targetMuscleGroups: ['Back', 'Core', 'Biceps', 'Shoulders'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Dumbbell Flyes', description: 'An isolation exercise for the chest, performed by extending dumbbells out to the sides and then bringing them together over the chest.', type: 'Strength', category: 'Upper Body', difficulty: 'Intermediate', equipmentNeeded: ['Dumbbells', 'Bench'], targetMuscleGroups: ['Chest', 'Shoulders'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Dumbbell Hammer Curls', description: 'A bicep curl variation with a neutral grip (palms facing each other), which also targets the brachialis and forearm muscles.', type: 'Strength', category: 'Upper Body', difficulty: 'Intermediate', equipmentNeeded: ['Dumbbells'], targetMuscleGroups: ['Biceps', 'Forearms'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Dumbbell Lateral Raises', description: 'A shoulder exercise that isolates the lateral (side) deltoids by raising dumbbells out to the sides.', type: 'Strength', category: 'Upper Body', difficulty: 'Intermediate', equipmentNeeded: ['Dumbbells'], targetMuscleGroups: ['Shoulders'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Dumbbell Step-ups', description: 'A lower body exercise where you step onto an elevated surface (bench or box) while holding dumbbells. Targets quads and glutes.', type: 'Strength', category: 'Lower Body', difficulty: 'Intermediate', equipmentNeeded: ['Dumbbells', 'Bench/Box'], targetMuscleGroups: ['Quadriceps', 'Glutes'], videoUrl: 'placeholder_url' },
+
+      // Barbell - Intermediate (assuming user has access if they list barbell)
+      { _id: new ObjectId(), name: 'Barbell Back Squat', description: 'A fundamental compound exercise for lower body strength, involving squatting with a barbell resting across the upper back.', type: 'Strength', category: 'Lower Body', difficulty: 'Intermediate', equipmentNeeded: ['Barbell', 'Squat Rack'], targetMuscleGroups: ['Quadriceps', 'Glutes', 'Hamstrings', 'Core'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Barbell Bench Press', description: 'A core upper body strength exercise where a barbell is lowered to the chest and then pressed back up. Targets chest, shoulders, and triceps.', type: 'Strength', category: 'Upper Body', difficulty: 'Intermediate', equipmentNeeded: ['Barbell', 'Bench', 'Rack'], targetMuscleGroups: ['Chest', 'Shoulders', 'Triceps'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Barbell Deadlift', description: 'A full-body strength exercise where a loaded barbell is lifted off the ground to the hips, then lowered back. Engages posterior chain, back, and legs.', type: 'Strength', category: 'Full Body', difficulty: 'Intermediate', equipmentNeeded: ['Barbell'], targetMuscleGroups: ['Full Body', 'Posterior Chain', 'Back', 'Legs'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Barbell Overhead Press (Strict)', description: 'An upper body pressing movement where a barbell is pressed strictly overhead from the shoulders. Builds shoulder and tricep strength.', type: 'Strength', category: 'Upper Body', difficulty: 'Intermediate', equipmentNeeded: ['Barbell', 'Rack'], targetMuscleGroups: ['Shoulders', 'Triceps'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Barbell Rows (Pendlay/Bent-over)', description: 'A back exercise performed by pulling a barbell towards the torso while bent over. Targets lats, rhomboids, and biceps.', type: 'Strength', category: 'Upper Body', difficulty: 'Intermediate', equipmentNeeded: ['Barbell'], targetMuscleGroups: ['Back', 'Biceps', 'Lats'], videoUrl: 'placeholder_url' },
+
+      // Kettlebell - Intermediate
+      { _id: new ObjectId(), name: 'Kettlebell Swings (Russian)', description: 'A dynamic, hip-hinge movement that builds explosive power in the glutes, hamstrings, and core. The kettlebell is swung to chest height.', type: 'Strength', category: 'Full Body', difficulty: 'Intermediate', equipmentNeeded: ['Kettlebell'], targetMuscleGroups: ['Glutes', 'Hamstrings', 'Core', 'Back'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Kettlebell Goblet Squat', description: 'A squat variation holding a kettlebell by the horns at chest level. Promotes good squat mechanics and core engagement.', type: 'Strength', category: 'Lower Body', difficulty: 'Intermediate', equipmentNeeded: ['Kettlebell'], targetMuscleGroups: ['Quadriceps', 'Glutes'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Kettlebell Turkish Get-up', description: 'A complex, full-body exercise that involves transitioning from lying on the floor to standing, all while holding a kettlebell overhead. Builds stability and strength.', type: 'Strength', category: 'Full Body', difficulty: 'Advanced', equipmentNeeded: ['Kettlebell'], targetMuscleGroups: ['Full Body', 'Core', 'Shoulders'], videoUrl: 'placeholder_url' },
+
+      // Resistance Bands - Beginner/Intermediate
+      { _id: new ObjectId(), name: 'Resistance Band Pull-Aparts', description: 'An exercise for upper back and shoulder health, performed by pulling a resistance band apart in front of the chest.', type: 'Strength', category: 'Upper Body', difficulty: 'Beginner', equipmentNeeded: ['Resistance Band'], targetMuscleGroups: ['Upper Back', 'Shoulders'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Resistance Band Glute Bridges', description: 'Glute bridges with a resistance band around the thighs to increase glute activation.', type: 'Strength', category: 'Lower Body', difficulty: 'Beginner', equipmentNeeded: ['Resistance Band'], targetMuscleGroups: ['Glutes'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Resistance Band Bicep Curls', description: 'Bicep curls using a resistance band for tension. Good for arm strength and muscle tone.', type: 'Strength', category: 'Upper Body', difficulty: 'Beginner', equipmentNeeded: ['Resistance Band'], targetMuscleGroups: ['Biceps'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Resistance Band Squats', description: 'Squats performed with a resistance band, typically looped under the feet and over the shoulders or held, to add resistance throughout the movement.', type: 'Strength', category: 'Lower Body', difficulty: 'Intermediate', equipmentNeeded: ['Resistance Band'], targetMuscleGroups: ['Quadriceps', 'Glutes'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Resistance Band Rows', description: 'A back exercise using a resistance band, mimicking cable rows. Anchor the band and pull towards your torso.', type: 'Strength', category: 'Upper Body', difficulty: 'Intermediate', equipmentNeeded: ['Resistance Band'], targetMuscleGroups: ['Back', 'Biceps'], videoUrl: 'placeholder_url' },
+      
+      // Flexibility/Mobility - All Levels (can be adjusted)
+      { _id: new ObjectId(), name: 'Cat-Cow Stretch', description: 'A gentle yoga pose that involves moving the spine from a rounded (cat) to an arched (cow) position. Improves spinal flexibility and relieves tension.', type: 'Flexibility', category: 'Mobility', difficulty: 'Beginner', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Spine', 'Core'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Downward-Facing Dog', description: 'A common yoga pose that stretches the hamstrings, calves, shoulders, and back, while also building upper body strength.', type: 'Flexibility', category: 'Mobility', difficulty: 'Beginner', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Hamstrings', 'Calves', 'Shoulders', 'Back'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Pigeon Stretch', description: 'A hip-opening stretch that targets the hip flexors and glutes. Effective for improving hip mobility.', type: 'Flexibility', category: 'Mobility', difficulty: 'Intermediate', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Hips', 'Glutes'], videoUrl: 'placeholder_url' },
+      { _id: new ObjectId(), name: 'Thoracic Spine Windmills', description: 'A mobility exercise to improve rotation in the thoracic (mid-upper) spine. Often done lying on one side.', type: 'Flexibility', category: 'Mobility', difficulty: 'Beginner', equipmentNeeded: ['Bodyweight'], targetMuscleGroups: ['Thoracic Spine', 'Shoulders'], videoUrl: 'placeholder_url' },
+    ];
+
+    // --- Dynamic Exercise Selection Logic ---
+    let selectedExercises = [];
+    const userEquipment = config.availableEquipment.map(e => e.toLowerCase()); // e.g., ['bodyweight', 'dumbbells']
+    const userFitnessLevel = config.fitnessLevel; // 'Beginner', 'Intermediate', 'Advanced'
+    const userTargetMuscles = (config.targetMuscleGroups || []).map(m => m.toLowerCase()); // e.g., ['chest', 'legs']
+    const userWorkoutType = config.workoutTypePreferences.toLowerCase(); // e.g., 'full body', 'upper body'
+
+    // Helper to check if exercise equipment is available
+    const hasEquipmentFor = (exercise) => {
+        if (exercise.equipmentNeeded.includes('Bodyweight') && userEquipment.includes('bodyweight')) return true;
+        return exercise.equipmentNeeded.some(eq => userEquipment.includes(eq.toLowerCase().replace(/[\/\s]/g, ''))); // Handles "Pull-up Bar", "Chair/Bench" etc.
+    };
+    
+    // Filter by fitness level and available equipment first
+    let eligibleExercises = allMockExercises.filter(ex => {
+        const levelMatch = ex.difficulty === userFitnessLevel || 
+                           (userFitnessLevel === 'Intermediate' && ex.difficulty === 'Beginner') ||
+                           (userFitnessLevel === 'Advanced' && (ex.difficulty === 'Intermediate' || ex.difficulty === 'Beginner'));
+        
+        const equipmentMatch = hasEquipmentFor(ex);
+        return levelMatch && equipmentMatch;
+    });
+
+    // Further filter by workout type preference (simple matching)
+    if (userWorkoutType.includes('full body')) {
+        // Already broadly filtered, try to ensure variety later
+    } else if (userWorkoutType.includes('upper body')) {
+        eligibleExercises = eligibleExercises.filter(ex => 
+            ex.targetMuscleGroups.some(mg => ['chest', 'shoulders', 'triceps', 'back', 'biceps', 'lats'].includes(mg.toLowerCase()))
+        );
+    } else if (userWorkoutType.includes('lower body')) {
+        eligibleExercises = eligibleExercises.filter(ex => 
+            ex.targetMuscleGroups.some(mg => ['quadriceps', 'glutes', 'hamstrings', 'calves'].includes(mg.toLowerCase()))
+        );
+    } else if (userWorkoutType.includes('core')) {
+        eligibleExercises = eligibleExercises.filter(ex => 
+            ex.targetMuscleGroups.some(mg => ['core', 'abs', 'obliques'].includes(mg.toLowerCase()))
+        );
+    } else if (userWorkoutType.includes('cardio')) {
+        eligibleExercises = eligibleExercises.filter(ex => ex.type === 'Cardio' || ex.targetMuscleGroups.includes('Cardio'));
+    }
+
+    // Prioritize by target muscle groups if specified
+    if (userTargetMuscles.length > 0) {
+        const targeted = eligibleExercises.filter(ex => 
+            userTargetMuscles.some(um => ex.targetMuscleGroups.map(em => em.toLowerCase()).includes(um))
+        );
+        if (targeted.length >= 3) { // Ensure we have enough targeted exercises
+             eligibleExercises = targeted; // Prioritize these
+        }
+    }
+    
+    // Shuffle eligible exercises to get variety
+    eligibleExercises.sort(() => 0.5 - Math.random());
+
+    // Select 3-5 exercises
+    const numExercisesToSelect = Math.max(3, Math.min(5, eligibleExercises.length));
+    selectedExercises = eligibleExercises.slice(0, numExercisesToSelect);
+
+    // If not enough exercises found, add some general bodyweight ones as fallback
+    if (selectedExercises.length < 3 && eligibleExercises.length === 0) { // if filter gave 0 results
+        console.warn("[AI Workout] No specific exercises match criteria, falling back to general bodyweight.");
+        let fallbackExercises = allMockExercises.filter(ex => 
+            ex.equipmentNeeded.includes('Bodyweight') && 
+            (ex.difficulty === userFitnessLevel || (userFitnessLevel === 'Intermediate' && ex.difficulty === 'Beginner'))
+        ).sort(() => 0.5 - Math.random());
+        selectedExercises = fallbackExercises.slice(0, Math.max(3, Math.min(5, fallbackExercises.length)));
+    } else if (selectedExercises.length < 3) { // if filter gave <3 results
+         console.warn(`[AI Workout] Only ${selectedExercises.length} specific exercises found, trying to add more general ones.`);
+         let additionalNeeded = 3 - selectedExercises.length;
+         let generalFallbacks = allMockExercises.filter(ex => 
+            ex.equipmentNeeded.includes('Bodyweight') && 
+            !selectedExercises.find(se => se._id.equals(ex._id)) && // not already selected
+            (ex.difficulty === userFitnessLevel || (userFitnessLevel === 'Intermediate' && ex.difficulty === 'Beginner'))
+         ).sort(() => 0.5 - Math.random()).slice(0, additionalNeeded);
+         selectedExercises.push(...generalFallbacks);
+    }
+
+
+    // If still no exercises, return an error (should be rare with the large pool)
+    if (selectedExercises.length === 0) {
+        return res.status(400).json({ success: false, message: "Could not generate a workout plan with the selected criteria. Try broadening your preferences." });
+    }
+
+    // Dynamically set sets/reps/duration
+    const finalMockExercises = selectedExercises.map((ex, index) => {
+        let sets = 3;
+        let reps = '10-12';
+        let durationSeconds;
+
+        if (ex.type === 'Core' || ex.name.toLowerCase().includes('plank')) {
+            reps = undefined; // Core exercises often duration-based
+            if (userFitnessLevel === 'Beginner') durationSeconds = 30;
+            else if (userFitnessLevel === 'Intermediate') durationSeconds = 45;
+            else durationSeconds = 60;
+        } else if (ex.type === 'Cardio' && !ex.name.toLowerCase().includes('jump')) { // For non-explosive cardio
+             sets = 1; // Often one continuous set for time
+             reps = undefined;
+             if (userFitnessLevel === 'Beginner') durationSeconds = 120; // 2 mins
+             else if (userFitnessLevel === 'Intermediate') durationSeconds = 180; // 3 mins
+             else durationSeconds = 300; // 5 mins (per cardio exercise in a circuit)
+        } else { // Strength
+            if (config.fitnessGoal === 'Strength Building') {
+                sets = userFitnessLevel === 'Advanced' ? 5 : 4;
+                reps = '5-8';
+            } else if (config.fitnessGoal === 'Muscle Gain (Hypertrophy)') {
+                sets = userFitnessLevel === 'Advanced' ? 4 : 3;
+                reps = '8-12';
+            } else if (config.fitnessGoal === 'Endurance') {
+                sets = 3;
+                reps = '15-20';
+            } else { // General fitness / Weight Loss
+                sets = 3;
+                reps = userFitnessLevel === 'Beginner' ? '8-10' : '10-15';
+            }
+        }
+        
+        // For AMRAP (As Many Reps As Possible)
+        if (ex.name.toLowerCase().includes('push-up') && config.fitnessGoal !== 'Strength Building') {
+            reps = 'AMRAP';
+        }
+
+
+        return {
+            _id: ex._id, // Use the ObjectId from the mock pool
+            exerciseId: ex._id.toString(), // Keep as string for client-side PlannedExercise compatibility
+            name: ex.name,
+            type: ex.type,
+            targetMuscleGroups: ex.targetMuscleGroups,
+            equipment: ex.equipmentNeeded.join(', '), // Convert array to string for schema
+            description: `Mock description for ${ex.name}. Level: ${ex.difficulty}. Equipment: ${ex.equipmentNeeded.join(', ')}.`,
+            videoUrl: ex.videoUrl,
+            sets: sets.toString(), // Ensure sets is a string as per some client expectations
+            reps: reps,
+            durationSeconds: durationSeconds,
+            order: index + 1,
+            // We might want to add 'instructions' here if the mock pool contains them
+        };
+    });
+
+
+    // 3. MOCK AI Response - Create a plausible UserWorkoutPlan object
+    const mockPlanName = `AI ${config.fitnessGoal} Plan (${config.fitnessLevel})`;
+    const planDescription = `An AI-generated mock workout plan for ${config.fitnessGoal}, tailored for a ${config.fitnessLevel} fitness level. Uses equipment: ${config.availableEquipment.join(', ')}. Workout Type: ${config.workoutTypePreferences}.`;
+
+
+    const finalPlan = {
+      _id: new ObjectId(),
+      userId: actualUserId,
+      planName: mockPlanName,
+      description: planDescription,
+      exercises: finalMockExercises,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isAIGenerated: true,
+    };
+
+    // 4. Save the AI-generated (mock) plan to the database
+    const userWorkoutPlansCollection = db.collection('userWorkoutPlans');
+    const dbResult = await userWorkoutPlansCollection.insertOne(finalPlan);
+
+    console.log(`[AI Workout] Successfully inserted MOCK AI workout plan ${dbResult.insertedId} for user ${actualUserId.toHexString()}.`);
+
+    res.status(201).json({
+      success: true,
+      message: 'AI workout plan generated and saved successfully (MOCK DATA)!',
+      plan: finalPlan
+    });
+
+  } catch (error) {
+    console.error('[AI Workout] Error generating AI workout plan:', error);
+    res.status(500).json({ success: false, message: 'Server error during AI workout plan generation.', errorDetails: error.toString() });
   }
 });
 

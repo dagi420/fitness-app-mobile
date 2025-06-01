@@ -19,6 +19,10 @@ import ProfileScreen from '../screens/Profile/ProfileScreen'; // Import ProfileS
 import ManualPlanCreatorScreen from '../screens/Planner/ManualPlanCreatorScreen'; // Import ManualPlanCreatorScreen
 import ExercisePickerScreen from '../screens/Planner/ExercisePickerScreen'; // Import ExercisePickerScreen
 import ActiveWorkoutScreen from '../screens/Workouts/ActiveWorkoutScreen'; // Import ActiveWorkoutScreen
+import ManualDietPlannerScreen from '../screens/Diet/ManualDietPlannerScreen'; // Import the new screen
+import FoodItemPickerScreen from '../screens/Food/FoodItemPickerScreen'; // Import FoodItemPickerScreen
+import AIConfigurationScreen from '../screens/AI/AIConfigurationScreen'; // Import AIConfigurationScreen
+import AIWorkoutConfigurationScreen from '../screens/AI/AIWorkoutConfigurationScreen'; // Import new screen
 // import UserDetailsScreen from '../screens/Onboarding/UserDetailsScreen'; // We'll handle navigation to this from GoalSelectionScreen
 
 // Remove MainAppPlaceholder or comment it out
@@ -92,6 +96,34 @@ const AppNavigator = () => {
                   }} 
                 />
                 <Stack.Screen name="ActiveWorkout" component={ActiveWorkoutScreen} options={{ headerShown: true, title: 'Active Workout' }} />
+                <Stack.Screen name="ManualDietPlanner" component={ManualDietPlannerScreen} options={{ title: 'Create Diet Plan' }} />
+                <Stack.Screen 
+                  name="FoodItemPicker" 
+                  component={FoodItemPickerScreen} 
+                  options={{ 
+                    title: 'Add Food to Meal', 
+                    presentation: 'modal' // Or as a normal screen
+                  }}
+                />
+                <Stack.Screen 
+                  name="AIConfigurationScreen"
+                  component={AIConfigurationScreen}
+                  options={{ 
+                    title: 'Configure AI Diet Plan', // Clarified title for diet
+                    presentation: 'modal', 
+                    headerShown: true // Explicitly show header for modal if desired
+                  }}
+                />
+                {/* New Screen for AI Workout Config */}
+                <Stack.Screen 
+                  name="AIWorkoutConfigurationScreen"
+                  component={AIWorkoutConfigurationScreen}
+                  options={{ 
+                    title: 'Configure AI Workout Plan',
+                    presentation: 'modal', 
+                    headerShown: true
+                  }}
+                />
               </>
             ) : (
               // Group onboarding screens if user is not fully onboarded

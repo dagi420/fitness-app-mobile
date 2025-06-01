@@ -1,13 +1,13 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons'; // For tab icons
-import { View, TouchableOpacity, StyleSheet, Platform, Pressable, Dimensions } from 'react-native'; // Import TouchableOpacity and View for custom button and added Dimensions
+import { View, TouchableOpacity, StyleSheet, Platform, Pressable } from 'react-native'; // Removed Dimensions as it's not critical for docked bar
 import { useNavigation, getFocusedRouteNameFromRoute } from '@react-navigation/native'; // To navigate from tab button and getFocusedRouteNameFromRoute
 import { StackNavigationProp } from '@react-navigation/stack'; // For typing navigation
 import { RootStackParamList } from './types'; // For typing navigation
 
 // Import your tab screens
-import DashboardScreen from '../screens/Home/DashboardScreen';
+import DashboardScreen from '../screens/MainApp/DashboardScreen';
 import WorkoutListScreen from '../screens/Workouts/WorkoutListScreen';
 import DietPlanScreen from '../screens/Diet/DietPlanScreen';
 import ProgressScreen from '../screens/Progress/ProgressScreen';
@@ -33,18 +33,13 @@ type RootStackNavigationProp = StackNavigationProp<RootStackParamList>;
 // Dummy component to assign to the tab screen that only acts as a button
 const DummyScreen = () => null;
 
-// Get screen width for dynamic positioning if needed
-const { width: screenWidth } = Dimensions.get('window');
-const tabIconContainerWidth = screenWidth / 5; // Assuming 5 visual spots (4 icons + 1 middle button)
-
 const CustomTabBarButton = ({ children, onPress }: { children: React.ReactNode, onPress?: () => void }) => (
   <TouchableOpacity
-    style={styles.customButtonContainer} // This container will be a flex item
+    style={styles.customButtonContainerDocked} // Use new style for docked version
     onPress={onPress}
-    activeOpacity={1} // Can adjust if feedback is desired directly on the transparent part
+    activeOpacity={0.7} 
   >
-    {/* The visual part is absolutely positioned relative to this container */}
-    <View style={styles.customButtonVisual}>
+    <View style={styles.customButtonVisualDocked}>
       {children}
     </View>
   </TouchableOpacity>
@@ -74,8 +69,8 @@ const MainTabNavigator = () => {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarShowLabel: false, // Hide labels for a cleaner look with a central button
-        tabBarStyle: styles.tabBarStyle, // Use StyleSheet for tabBarStyle
+        tabBarShowLabel: true, // Show labels for docked bar
+        tabBarStyle: styles.tabBarStyleDocked, // Use new style for docked bar
         headerShown: true, // Keep header shown for the profile button
         headerTitle: getHeaderTitle(route), // Dynamically set header title
         headerRight: () => (
@@ -84,10 +79,11 @@ const MainTabNavigator = () => {
           </Pressable>
         ),
         // Apply a common style to each tab item for consistent spacing
-        tabBarItemStyle: styles.tabBarItemStyle, 
-        tabBarIcon: ({ focused, color }) => { // size prop is not used from here if tabBarItemStyle controls it
+        tabBarItemStyle: styles.tabBarItemStyleDocked,
+        tabBarIcon: ({ focused, color, size }) => { 
           let iconName;
-          let iconSize = focused ? 24 : 24;
+          // Using size passed by navigator for docked version
+          // let iconSize = focused ? 26 : 24; 
 
           if (route.name === 'Dashboard') {
             iconName = focused ? 'home' : 'home-outline';
@@ -99,7 +95,7 @@ const MainTabNavigator = () => {
             iconName = focused ? 'stats-chart' : 'stats-chart-outline';
           }
           if (!iconName) return null; // Should not happen for defined routes
-          return <Ionicons name={iconName as any} size={iconSize} color={color} />;
+          return <Ionicons name={iconName as any} size={size} color={color} />;
         },
         tabBarActiveTintColor: '#007AFF', // A common modern blue
         tabBarInactiveTintColor: '#8E8E93', // iOS-like inactive color
@@ -116,10 +112,9 @@ const MainTabNavigator = () => {
         component={DummyScreen} // Use DummyScreen to avoid inline function warning
         options={{
           headerShown: false, // No header for the tab itself that is just a button modal
-          tabBarItemStyle: { ...styles.tabBarItemStyle, flex: 1 }, // Also ensure this item gets its flex space
-          tabBarIcon: ({ focused }) => (
-            // This icon is for the children prop of CustomTabBarButton
-            <Ionicons name="add" size={28} color={'#FFFFFF'} /> 
+          tabBarItemStyle: styles.tabBarItemStyleDocked, // Also ensure this item gets its flex space
+          tabBarIcon: ({ color, size }) => ( // Standard icon, color/size will be passed by navigator
+            <Ionicons name="add-circle" size={size + 14} color={color} /> // Make it larger, use theme color
           ),
           tabBarButton: (props) => (
             <CustomTabBarButton
@@ -137,53 +132,80 @@ const MainTabNavigator = () => {
 };
 
 const styles = StyleSheet.create({
+  tabBarStyleDocked: {
+    backgroundColor: '#FFFFFF',
+    height: Platform.OS === 'ios' ? 85 : 70, // Standard height, adjust for iOS bottom safe area
+    paddingBottom: Platform.OS === 'ios' ? 20 : 0, // Padding for home indicator on iOS
+    borderTopWidth: 0.5, // Subtle top border
+    borderTopColor: '#E0E0E0',
+    // Removed absolute positioning, shadows, borderRadius, left, right, bottom
+  },
+  tabBarItemStyleDocked: {
+    // flex: 1, // Default behavior is fine
+    // alignItems: 'center', // Default
+    // justifyContent: 'center', // Default
+  },
+  customButtonContainerDocked: { // For the TouchableOpacity wrapper of the center button
+    flex: 1, 
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  customButtonVisualDocked: { // For the <View> inside the TouchableOpacity (if needed for more complex styling)
+    // This View can be used if you want the icon container itself to have a background or specific shape
+    // For a simple icon button, this might not be strictly necessary, the icon itself can be styled.
+    // If the icon is large enough, this visual can be minimal or just for alignment.
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Example: Make it slightly elevated or have a subtle background for the larger icon
+    // width: 60, 
+    // height: 40, 
+    // borderRadius: 10, 
+    // backgroundColor: '#f0f0f0', 
+  },
+  // Original floating styles (kept for reference, can be deleted)
   tabBarStyle: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 30 : 20, // Adjust for notch/home bar on iOS
+    bottom: Platform.OS === 'ios' ? 30 : 20, 
     left: 25,
     right: 25,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20, // Smoother radius
-    height: 65, // Adjusted height
-    flexDirection: 'row', // Ensure items are laid out in a row
-    justifyContent: 'space-around', // Distribute items evenly
-    alignItems: 'center', // Center items vertically
-    paddingHorizontal: 0, // No horizontal padding on the bar itself, items control their space
-    borderTopWidth: 0, // Remove top border for a cleaner look
+    borderRadius: 20, 
+    height: 65, 
+    flexDirection: 'row', 
+    justifyContent: 'space-around', 
+    alignItems: 'center', 
+    paddingHorizontal: 0, 
+    borderTopWidth: 0, 
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: -3, // Shadow upwards for a floating effect
+      height: -3, 
     },
     shadowOpacity: 0.05,
     shadowRadius: 4.0,
-    elevation: 5, // Elevation for Android shadow
+    elevation: 5, 
   },
   tabBarItemStyle: {
-    flex: 1, // Each item takes equal width
-    alignItems: 'center', // Center icon within the item
-    justifyContent: 'center', // Center icon vertically
+    flex: 1, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
   },
-  customButtonContainer: { // This is the TouchableOpacity passed to tabBarButton
-    flex: 1, // Takes up its 1/5th slot in the tab bar
+  customButtonContainer: { 
+    flex: 1, 
     justifyContent: 'center',
     alignItems: 'center',
-     backgroundColor: 'transparent', // Or for debugging: 'rgba(0,255,0,0.2)' 
+    backgroundColor: 'transparent',
   },
-  customButtonVisual: { // This is the styled circular button, absolutely positioned
+  customButtonVisual: { 
     position: 'absolute',
-    // To center it horizontally within its parent (customButtonContainer which is flex:1)
-    // and then offset vertically. The parent should be wide enough.
-    top: -22, // Adjust this to pull the visual button up
-    // left: '50%', // These with transform would center it if parent wasn't full width of slot
-    // marginLeft: -30, // Half of its own width
+    top: -22, 
     width: 55,
     height: 55,
     borderRadius: 30,
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'center', // Center itself within the flex:1 container
+    alignSelf: 'center', 
     shadowColor: '#007AFF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,

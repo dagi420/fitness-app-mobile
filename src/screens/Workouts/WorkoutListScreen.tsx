@@ -15,31 +15,31 @@ import { fetchUserWorkoutPlans, UserWorkoutPlan } from '../../api/planService';
 import { useAuth } from '../../store/AuthContext';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../../navigation/types';
-import { PlannedExercise } from '../Planner/ManualPlanCreatorScreen'; // For mapping general exercises
+import { RootStackParamList, WorkoutsStackParamList } from '../../navigation/types';
+import { PlannedExercise } from '../Planner/ManualPlanCreatorScreen';
+import { Ionicons } from '@expo/vector-icons';
 
 // Define a unified type for items that WorkoutCard can display
-// We use UserWorkoutPlan as the base because it already includes `exercises` and `planName`
-// General workouts will be mapped to this structure for consistency in the card.
 export interface DisplayableWorkoutPlan extends Omit<UserWorkoutPlan, 'userId' | 'isAIgenerated'> {
-  // Ensure all fields WorkoutCard needs are here or can be derived
-  // `name` will be `planName` for UserWorkoutPlan, or mapped from Workout.name
-  // `description` needs to be present or mapped
-  // `type` and `difficulty` need to be present or mapped
-  // `durationEstimateMinutes` might not exist for UserWorkoutPlan, handle optionally
   description?: string;
   type?: string;
   difficulty?: string;
   durationEstimateMinutes?: number;
+  isAIGenerated?: boolean;
 }
 
 // Define navigation prop type for this screen
-type WorkoutListNavigationProp = StackNavigationProp<RootStackParamList, 'WorkoutList'>;
+type WorkoutListNavigationProp = StackNavigationProp<WorkoutsStackParamList, 'WorkoutList'>;
 
 // Basic Card component for displaying a workout
 const WorkoutCard: React.FC<{ workout: DisplayableWorkoutPlan; onPress: () => void }> = ({ workout, onPress }) => (
   <TouchableOpacity style={styles.card} onPress={onPress}>
-    <Text style={styles.cardTitle}>{workout.planName || (workout as any).name}</Text>
+    <View style={styles.cardHeader}>
+        <Text style={styles.cardTitle}>{workout.planName || (workout as any).name}</Text>
+        {workout.isAIGenerated && (
+            <Ionicons name="sparkles-outline" size={20} color={styles.aiIcon.color} style={styles.aiIcon} />
+        )}
+    </View>
     {(workout.type || workout.difficulty) && (
         <Text style={styles.cardSubtitle}>
             {workout.type}{workout.type && workout.difficulty ? ' - ' : ''}{workout.difficulty}
@@ -57,11 +57,34 @@ const WorkoutCard: React.FC<{ workout: DisplayableWorkoutPlan; onPress: () => vo
   </TouchableOpacity>
 );
 
+const SectionTitleWithIcon: React.FC<{ title: string }> = ({ title }) => {
+    let iconName: React.ComponentProps<typeof Ionicons>['name'] = 'list-outline';
+    let iconColor = '#495057';
+
+    if (title === 'AI Generated Plans') {
+        iconName = 'bulb-outline';
+        iconColor = '#28a745';
+    } else if (title === 'My Custom Plans') {
+        iconName = 'person-circle-outline';
+        iconColor = '#007bff';
+    } else if (title === 'Featured Workouts') {
+        iconName = 'star-outline';
+        iconColor = '#ffc107';
+    }
+
+    return (
+        <View style={styles.sectionHeaderContainer}>
+            <Ionicons name={iconName} size={24} color={iconColor} style={styles.sectionHeaderIcon} />
+            <Text style={[styles.sectionHeader, { color: iconColor }]}>{title}</Text>
+        </View>
+    );
+};
+
 const WorkoutListScreen = () => {
   const { user, token } = useAuth();
   const navigation = useNavigation<WorkoutListNavigationProp>();
 
-  const [sections, setSections] = useState<Array<{ title: string; data: DisplayableWorkoutPlan[] }>>([]);
+  const [sections, setSections] = useState<Array<{ title: string; data: DisplayableWorkoutPlan[]; isAIGenerated?: boolean }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -69,27 +92,30 @@ const WorkoutListScreen = () => {
   const mapWorkoutToDisplayablePlan = (workout: Workout): DisplayableWorkoutPlan => ({
     _id: workout._id,
     planName: workout.name,
-    exercises: workout.exercises.map((ex: ExerciseDetail, index: number) => ({
-        // Attempt to map ExerciseDetail to PlannedExercise more completely
-        _id: `${workout._id}_ex_${index}`, // Create a unique-ish ID for these mapped exercises
-        exerciseName: ex.exerciseName,
-        // General workouts from `workouts` collection might not have type/difficulty per exercise like BaseExercise does
-        // So we provide defaults or leave them out if WorkoutCard doesn't strictly need them for this view.
-        type: (ex as any).type || 'N/A', // Assuming ExerciseDetail might not have these
-        difficulty: (ex as any).difficulty || 'N/A',
-        targetMuscleGroups: (ex as any).targetMuscleGroups || [],
-        equipmentNeeded: (ex as any).equipmentNeeded || [],
-        planSets: String(ex.sets), // Convert sets to string if PlannedExercise.planSets is string
-        planReps: ex.reps,
-        // description, videoUrl, imageUrl might be missing for these mapped exercises
+    exercises: workout.exercises.map((ex: ExerciseDetail, index: number): PlannedExercise => ({
+        _id: ex._id || `${workout._id}_ex_${index}`,
+        name: ex.name,
+        type: ex.type || 'N/A',
+        category: (ex as any).category || 'General',
+        difficulty: ex.difficulty || 'N/A',
+        targetMuscleGroups: ex.muscleGroups || [],
+        equipment: ex.equipment || undefined,
+        description: ex.description || undefined,
+        videoUrl: ex.videoUrl || undefined,
+        imageUrl: ex.imageUrl || undefined,
+        instructions: ex.instructions || undefined,
+        sets: ex.sets !== undefined ? String(ex.sets) : undefined,
+        reps: ex.reps !== undefined ? String(ex.reps) : undefined,
+        durationSeconds: ex.durationSeconds || undefined,
+        order: ex.order !== undefined ? ex.order : index,
     })),
     description: workout.description,
     type: workout.type,
     difficulty: workout.difficulty,
     durationEstimateMinutes: workout.durationEstimateMinutes,
-    // These are from UserWorkoutPlan, provide sensible defaults or ensure DisplayableWorkoutPlan doesn't require them
     createdAt: (workout as any).createdAt || new Date().toISOString(), 
     updatedAt: (workout as any).updatedAt || new Date().toISOString(), 
+    isAIGenerated: false,
   });
 
   const loadAllData = useCallback(async (refresh = false) => {
@@ -108,25 +134,44 @@ const WorkoutListScreen = () => {
         fetchUserWorkoutPlans(token, user._id)
       ]);
 
-      const loadedSections = [];
+      const loadedSectionsData: { [key: string]: DisplayableWorkoutPlan[] } = {
+        ai: [],
+        custom: [],
+        featured: []
+      };
 
-      if (userPlansResponse.success && userPlansResponse.plans && userPlansResponse.plans.length > 0) {
-        // Map UserWorkoutPlan to DisplayableWorkoutPlan
-        const customPlans: DisplayableWorkoutPlan[] = userPlansResponse.plans.map(p => ({
-            ...p, // Spread all properties from UserWorkoutPlan
-            // planName is already there, description, type, difficulty might be missing or part of exercises structure
-            // For simplicity, WorkoutCard will handle optional fields
-        }));
-        loadedSections.push({ title: 'My Custom Workout Plans', data: customPlans });
+      if (userPlansResponse.success && userPlansResponse.plans) {
+        userPlansResponse.plans.forEach(p => {
+          const displayablePlan: DisplayableWorkoutPlan = {
+            ...p,
+            isAIGenerated: p.isAIgenerated,
+          };
+          if (p.isAIgenerated) {
+            loadedSectionsData.ai.push(displayablePlan);
+          } else {
+            loadedSectionsData.custom.push(displayablePlan);
+          }
+        });
       }
 
-      if (generalWorkoutsResponse.success && generalWorkoutsResponse.workouts && generalWorkoutsResponse.workouts.length > 0) {
-        // Map Workout to DisplayableWorkoutPlan
-        const generalPlans: DisplayableWorkoutPlan[] = generalWorkoutsResponse.workouts.map(mapWorkoutToDisplayablePlan);
-        loadedSections.push({ title: 'Available Workouts', data: generalPlans });
+      if (generalWorkoutsResponse.success && generalWorkoutsResponse.workouts) {
+        generalWorkoutsResponse.workouts.forEach(w => {
+            loadedSectionsData.featured.push(mapWorkoutToDisplayablePlan(w));
+        });
       }
       
-      setSections(loadedSections);
+      const finalSections = [];
+      if (loadedSectionsData.ai.length > 0) {
+        finalSections.push({ title: 'AI Generated Plans', data: loadedSectionsData.ai, isAIGenerated: true });
+      }
+      if (loadedSectionsData.custom.length > 0) {
+        finalSections.push({ title: 'My Custom Plans', data: loadedSectionsData.custom, isAIGenerated: false });
+      }
+      if (loadedSectionsData.featured.length > 0) {
+        finalSections.push({ title: 'Featured Workouts', data: loadedSectionsData.featured, isAIGenerated: false });
+      }
+      
+      setSections(finalSections);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -135,7 +180,6 @@ const WorkoutListScreen = () => {
     }
   }, [token, user?._id, mapWorkoutToDisplayablePlan]);
 
-  // Initial load and refresh on screen focus
   useFocusEffect(
     useCallback(() => {
       loadAllData();
@@ -147,23 +191,16 @@ const WorkoutListScreen = () => {
     loadAllData(true);
   };
 
-  const handleWorkoutPress = (plan: DisplayableWorkoutPlan, sectionTitle: string) => {
+  const handleWorkoutPress = (plan: DisplayableWorkoutPlan) => {
     if (plan._id) {
-      if (sectionTitle === 'My Custom Workout Plans') {
-        // It's a user-created plan, pass the whole object
-        // The `plan` object here is already a DisplayableWorkoutPlan, which is compatible
         navigation.navigate('WorkoutDetail', { planObject: plan });
-      } else {
-        // It's a general workout, pass only the ID for fetching
-        navigation.navigate('WorkoutDetail', { workoutId: plan._id });
-      }
     } else {
-        Alert.alert("Error", "Workout ID is missing.");
+        Alert.alert("Error", "Workout data is incomplete.");
     }
   };
 
   if (isLoading && sections.length === 0) {
-    return <SafeAreaView style={styles.centered}><ActivityIndicator size="large" /></SafeAreaView>;
+    return <SafeAreaView style={styles.centered}><ActivityIndicator size="large" color="#007AFF" /></SafeAreaView>;
   }
 
   if (error) {
@@ -177,34 +214,37 @@ const WorkoutListScreen = () => {
     );
   }
 
-  if (sections.length === 0 && !isLoading) {
-    return (
-        <SafeAreaView style={styles.centered}>
-            <Text style={styles.emptyStateText}>No workouts or plans available.</Text>
-            <Text style={styles.infoText}>Pull down to refresh or create a new plan!</Text>
-            <TouchableOpacity onPress={onRefresh} style={styles.retryButton}>
-                <Text style={styles.retryButtonText}>Refresh</Text>
-            </TouchableOpacity>
-        </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <SectionList
         sections={sections}
-        keyExtractor={(item, index) => item._id + index}
-        renderItem={({ item, section }) => (
-            <WorkoutCard workout={item} onPress={() => handleWorkoutPress(item, section.title)} />
+        keyExtractor={(item, index) => item._id + index + item.planName}
+        renderItem={({ item }) => (
+            <WorkoutCard workout={item} onPress={() => handleWorkoutPress(item)} />
         )}
         renderSectionHeader={({ section: { title } }) => (
-          <Text style={styles.sectionHeader}>{title}</Text>
+          <SectionTitleWithIcon title={title} />
         )}
-        contentContainerStyle={styles.listContainer}
-        ListHeaderComponent={<Text style={styles.mainTitle}>All Workouts & Plans</Text>}
+        ListEmptyComponent={
+            !isLoading ? (
+                <View style={styles.centeredMessageContainer}>
+                    <Ionicons name="sad-outline" size={60} color="#ccc" />
+                    <Text style={styles.emptyStateText}>No Workouts Yet!</Text>
+                    <Text style={styles.infoText}>
+                        Create a custom plan, generate one with AI, or check back later for featured workouts.
+                    </Text>
+                    <TouchableOpacity onPress={onRefresh} style={styles.refreshButtonEmptyState}>
+                        <Ionicons name="refresh-outline" size={20} color="#007AFF" />
+                        <Text style={styles.refreshButtonText}>Refresh</Text>
+                    </TouchableOpacity>
+                </View>
+            ) : null
+        }
+        contentContainerStyle={sections.length === 0 ? styles.centered : styles.listContainer}
+        ListHeaderComponent={<Text style={styles.mainTitle}>Your Workouts</Text>}
         stickySectionHeadersEnabled={false}
         refreshControl={
-            <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
+            <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} colors={["#007AFF"]} tintColor="#007AFF"/>
         }
       />
     </SafeAreaView>
@@ -214,106 +254,148 @@ const WorkoutListScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f4f4f8',
+    backgroundColor: '#F7F7F9',
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#f4f4f8',
+    backgroundColor: '#F7F7F9',
+  },
+  centeredMessageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 30,
+    marginTop: 50,
   },
   listContainer: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 15,
     paddingBottom: 20,
   },
   mainTitle: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    marginTop: 10,
-    marginBottom: 15,
-    marginLeft: 10,
-    color: '#333'
+    fontSize: 28,
+    fontWeight: '700',
+    marginTop: 20,
+    marginBottom: 20,
+    marginLeft: 5,
+    color: '#1C1C1E',
+  },
+  sectionHeaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    paddingVertical: 10,
+    paddingHorizontal: 5,
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  sectionHeaderIcon: {
+    marginRight: 10,
   },
   sectionHeader: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    backgroundColor: '#e9ecef',
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    marginTop: 15,
-    marginBottom: 10,
-    borderRadius: 6,
-    color: '#495057'
+    fontSize: 22,
+    fontWeight: '600',
   },
   errorText: {
-    color: 'red',
+    color: '#D32F2F',
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 15,
   },
   emptyStateText: {
-    fontSize: 16,
+    fontSize: 20,
+    fontWeight: '600',
     color: '#555',
     textAlign: 'center',
-    marginBottom: 5,
+    marginBottom: 10,
   },
   infoText: {
-    color: '#555',
-    fontSize: 14,
+    color: '#777',
+    fontSize: 15,
     textAlign: 'center',
     marginTop: 5,
-    marginBottom: 15,
+    marginBottom: 25,
+    lineHeight: 22,
   },
   retryButton: {
-    marginTop: 10,
+    marginTop: 15,
     backgroundColor: '#007AFF',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 5,
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 8,
   },
   retryButtonText: {
     color: 'white',
     fontSize: 16,
+    fontWeight: '500',
+  },
+  refreshButtonEmptyState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderColor: '#007AFF',
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  refreshButtonText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 8,
   },
   card: {
     backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 15,
-    marginHorizontal: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    borderRadius: 12,
+    padding: 18,
+    marginBottom: 18,
+    marginHorizontal: 0,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 5,
-    color: '#007AFF'
+    fontSize: 19,
+    fontWeight: '600',
+    color: '#0A7AFF',
+    flex: 1,
+  },
+  aiIcon: {
+    marginLeft: 8,
+    color: '#FFC107',
   },
   cardSubtitle: {
     fontSize: 14,
-    color: '#555',
-    marginBottom: 5,
+    color: '#4A4A4A',
+    marginBottom: 6,
   },
   cardDuration: {
     fontSize: 13,
-    color: '#777',
+    color: '#6C6C70',
     fontStyle: 'italic',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   cardDescription: {
     fontSize: 14,
-    color: '#333',
-    marginBottom: 8,
+    color: '#3C3C43',
+    marginBottom: 10,
+    lineHeight: 20,
   },
   cardExerciseCount: {
     fontSize: 13,
-    color: '#007AFF',
-    marginTop: 5,
+    color: '#0A7AFF',
+    marginTop: 8,
     fontWeight: '500',
   }
 });

@@ -1,51 +1,121 @@
-import React from 'react';
-import { View, Text, StyleSheet, Button, SafeAreaView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Button, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../../navigation/types';
+import { RootStackParamList, AIPlanConfigData, AIWorkoutConfigData } from '../../navigation/types';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../../store/AuthContext';
+import { generateAIWorkoutPlan } from '../../api/workoutService';
+import { generateAIDietPlan } from '../../api/dietService';
 
 type CreatePlanScreenNavigationProp = StackNavigationProp<RootStackParamList, 'CreatePlan'>;
 
 const CreatePlanScreen = () => {
   const navigation = useNavigation<CreatePlanScreenNavigationProp>();
+  const { user, token } = useAuth();
+  const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
+  const [isGeneratingDiet, setIsGeneratingDiet] = useState(false);
 
-  const handleAIGenerate = () => {
-    // Navigate to AI Plan Generation Flow (to be created)
-    alert('Navigate to AI Plan Generation - Coming Soon!');
-    // navigation.navigate('AIWorkoutPlanner'); 
+  const handleAIDietGenerate = () => {
+    if (!user || !token) {
+      Alert.alert("Authentication Error", "User not authenticated.");
+      return;
+    }
+    navigation.navigate('AIConfigurationScreen', {
+      onSubmit: async (config: AIPlanConfigData) => {
+        setIsGeneratingDiet(true);
+        Alert.alert("AI Diet Generation", "Generating your personalized diet plan... Please wait.");
+        try {
+          const response = await generateAIDietPlan(token, config);
+          if (response.success && response.plan) {
+            Alert.alert("Success", "AI diet plan generated successfully!");
+            navigation.navigate('MainApp', { screen: 'Diet', params: { refresh: true } as any });
+          } else {
+            Alert.alert("Error", response.message || "Failed to generate AI diet plan.");
+          }
+        } catch (apiError) {
+          Alert.alert("Error", apiError instanceof Error ? apiError.message : "An unexpected error occurred.");
+        } finally {
+          setIsGeneratingDiet(false);
+        }
+      }
+    });
+  };
+
+  const handleAIWorkoutGenerate = () => {
+    if (!user || !token) {
+      Alert.alert("Authentication Error", "User not authenticated.");
+      return;
+    }
+    navigation.navigate('AIWorkoutConfigurationScreen', {
+      onSubmit: async (config: AIWorkoutConfigData) => {
+        setIsGeneratingWorkout(true);
+        Alert.alert("AI Workout Generation", "Generating your personalized workout plan... Please wait.");
+        try {
+          const response = await generateAIWorkoutPlan(token, config);
+          if (response.success && response.plan) {
+            Alert.alert("Success", "AI workout plan generated successfully!");
+            navigation.navigate('MainApp', { screen: 'Workouts', params: { screen: 'WorkoutList' } });
+          } else {
+            Alert.alert("Error", response.message || "Failed to generate AI workout plan.");
+          }
+        } catch (apiError) {
+          Alert.alert("Error", apiError instanceof Error ? apiError.message : "An unexpected error occurred.");
+        } finally {
+          setIsGeneratingWorkout(false);
+        }
+      }
+    });
   };
 
   const handleManualCreate = () => {
-    // Navigate to Manual Plan Creation Flow (to be created)
-    // alert('Navigate to Manual Plan Creation - Coming Soon!');
-    navigation.navigate('ManualPlanCreator', { preSelectedExercises: undefined }); // Navigate to the new screen
+    navigation.navigate('ManualPlanCreator', { preSelectedExercises: undefined });
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <Text style={styles.title}>Create Your Workout Plan</Text>
+        <Text style={styles.title}>Create Your Next Plan</Text>
         <Text style={styles.subtitle}>
           Choose how you'd like to build your next workout or diet regimen.
         </Text>
 
         <View style={styles.optionButtonContainer}>
-          <Button 
-            title="Generate with AI ✨"
-            onPress={handleAIGenerate} 
-          />
+          {isGeneratingDiet ? (
+            <ActivityIndicator size="large" color="#007AFF" />
+          ) : (
+            <Button 
+              title="AI Generate Diet Plan 🥗"
+              onPress={handleAIDietGenerate} 
+              disabled={isGeneratingDiet}
+            />
+          )}
           <Text style={styles.optionDescription}>
-            Let our AI craft a personalized plan based on your goals and profile.
+            Let our AI craft a personalized diet plan based on your goals and profile.
+          </Text>
+        </View>
+
+        <View style={styles.optionButtonContainer}>
+          {isGeneratingWorkout ? (
+            <ActivityIndicator size="large" color="#007AFF" />
+          ) : (
+            <Button 
+              title="AI Generate Workout Plan 💪"
+              onPress={handleAIWorkoutGenerate} 
+              disabled={isGeneratingWorkout}
+            />
+          )}
+          <Text style={styles.optionDescription}>
+            Let our AI craft a personalized workout plan for your fitness goals.
           </Text>
         </View>
 
         <View style={styles.optionButtonContainer}>
           <Button 
-            title="Create Manually 📝"
+            title="Create Workout Manually 📝"
             onPress={handleManualCreate} 
           />
           <Text style={styles.optionDescription}>
-            Build your own plan from scratch or by customizing existing workouts.
+            Build your own workout plan from scratch by selecting exercises.
           </Text>
         </View>
 
@@ -60,7 +130,7 @@ const CreatePlanScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f0f2f5', // A slightly different background
+    backgroundColor: '#f0f2f5',
   },
   container: {
     flex: 1,
@@ -83,6 +153,8 @@ const styles = StyleSheet.create({
   },
   optionButtonContainer: {
     width: '90%',
+    minHeight: 100,
+    justifyContent: 'center',
     marginBottom: 25,
     padding: 15,
     backgroundColor: '#fff',

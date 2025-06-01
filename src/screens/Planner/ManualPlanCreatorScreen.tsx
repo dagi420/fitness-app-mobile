@@ -23,21 +23,25 @@ type ManualPlanCreatorRouteProp = RouteProp<RootStackParamList, 'ManualPlanCreat
 // Interface for a general exercise object (as fetched from a future exercises API)
 export interface BaseExercise {
   _id: string;
-  exerciseName: string;
+  name: string;
   type: string; // e.g., Strength, Cardio, Flexibility
+  category: string; // e.g., Upper Body, Lower Body, Core, Cardio
   difficulty: string; // e.g., Beginner, Intermediate, Advanced
   targetMuscleGroups?: string[];
   equipmentNeeded?: string[];
+  equipment?: string;
   description?: string;
-  // videoUrl?: string;
-  // imageUrl?: string;
+  videoUrl?: string;
+  imageUrl?: string;
+  instructions?: string[];
 }
 
 // Interface for an exercise within the plan (extends BaseExercise)
 export interface PlannedExercise extends BaseExercise {
-  planSets?: string; 
-  planReps?: string; 
-  planDurationSeconds?: number; 
+  sets?: string;
+  reps?: string;
+  durationSeconds?: number;
+  order?: number;
   // notes?: string;
 }
 
@@ -56,7 +60,7 @@ const ManualPlanCreatorScreen = () => {
       // Assuming preSelectedExercises are of type BaseExercise or compatible
       const newPlannedExercises: PlannedExercise[] = route.params.preSelectedExercises.map(ex => ({
          ...ex, // Spread all properties from the selected exercise
-         // planSets, planReps, etc., will be undefined initially or can be defaulted
+         // sets, reps, etc., will be undefined initially or can be defaulted
         }));
       setExercisesInPlan(prev => [...prev, ...newPlannedExercises]);
       navigation.setParams({ preSelectedExercises: undefined });
@@ -107,24 +111,24 @@ const ManualPlanCreatorScreen = () => {
   
   const renderExerciseItem = ({ item, index }: { item: PlannedExercise, index: number }) => (
     <View style={styles.exerciseItemContainer}>
-      <Text style={styles.exerciseName}>{item.exerciseName}</Text>
+      <Text style={styles.exerciseName}>{item.name}</Text>
       <Text>Type: {item.type} | Difficulty: {item.difficulty}</Text>
       <TextInput 
         placeholder="Sets (e.g., 3)"
-        value={item.planSets}
+        value={item.sets}
         onChangeText={text => {
           const newExercises = [...exercisesInPlan];
-          newExercises[index].planSets = text;
+          newExercises[index].sets = text;
           setExercisesInPlan(newExercises);
         }}
         style={styles.exerciseInput}
       />
       <TextInput 
         placeholder="Reps (e.g., 8-12)"
-        value={item.planReps}
+        value={item.reps}
         onChangeText={text => {
           const newExercises = [...exercisesInPlan];
-          newExercises[index].planReps = text;
+          newExercises[index].reps = text;
           setExercisesInPlan(newExercises);
         }}
         style={styles.exerciseInput}

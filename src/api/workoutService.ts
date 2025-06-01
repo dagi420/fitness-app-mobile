@@ -1,13 +1,26 @@
 import { API_BASE_URL } from './apiConfig'; // Import from new config file
+import { AIWorkoutConfigData } from '../navigation/types'; // Import the config type
+import { UserWorkoutPlan } from './planService'; // To type the response for a generated plan
 
 // Define the structure of a Workout object based on your server's response
 // This should align with the data in your 'workouts' collection (and the mock data)
 export interface ExerciseDetail {
-  exerciseName: string; // Or exerciseId if you reference an 'exercises' collection
+  _id: string;
+  name: string;
+  description: string;
+  muscleGroups: string[]; // e.g., ['Chest', 'Triceps']
+  equipment?: string; // e.g., 'Dumbbells', 'Bench'
+  difficulty?: 'Beginner' | 'Intermediate' | 'Advanced';
+  instructions?: string[]; // Step-by-step instructions
+  imageUrl?: string; // Optional image URL for visual aid
+  videoUrl?: string; // Optional video URL for tutorial
+  // Plan-specific properties that can come with an exercise when part of a fetched workout
   sets?: number | string;
   reps?: string;
   durationSeconds?: number;
-  // Add other relevant exercise details
+  order?: number;
+  type?: string; // Added type to align with BaseExercise and server mock data for workouts
+  // Reps, Sets, Duration, Rest will be part of the WorkoutPlan structure, not the exercise itself
 }
 
 export interface Workout {
@@ -75,6 +88,41 @@ export const fetchWorkoutById = async (workoutId: string, token: string): Promis
     return data;
   } catch (error) {
     console.error('Fetch single workout API error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
+    return { success: false, message: errorMessage };
+  }
+};
+
+// Interface for the AI Workout Plan Generation API Response
+interface GenerateAIWorkoutPlanResponse {
+  success: boolean;
+  message: string;
+  plan?: UserWorkoutPlan; // The AI generated plan
+}
+
+// Function to call the backend for AI workout plan generation
+export const generateAIWorkoutPlan = async (
+  token: string, 
+  config: AIWorkoutConfigData
+): Promise<GenerateAIWorkoutPlanResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/ai/generate-workout-plan`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ config }), // Send config in the body
+    });
+
+    const data: GenerateAIWorkoutPlanResponse = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to generate AI workout plan');
+    }
+    return data;
+  } catch (error) {
+    console.error('Generate AI workout plan API error:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
     return { success: false, message: errorMessage };
   }

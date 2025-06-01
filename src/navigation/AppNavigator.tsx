@@ -18,6 +18,7 @@ import CreatePlanScreen from '../screens/Planner/CreatePlanScreen'; // Import Cr
 import ProfileScreen from '../screens/Profile/ProfileScreen'; // Import ProfileScreen
 import ManualPlanCreatorScreen from '../screens/Planner/ManualPlanCreatorScreen'; // Import ManualPlanCreatorScreen
 import ExercisePickerScreen from '../screens/Planner/ExercisePickerScreen'; // Import ExercisePickerScreen
+import ActiveWorkoutScreen from '../screens/Workouts/ActiveWorkoutScreen'; // Import ActiveWorkoutScreen
 // import UserDetailsScreen from '../screens/Onboarding/UserDetailsScreen'; // We'll handle navigation to this from GoalSelectionScreen
 
 // Remove MainAppPlaceholder or comment it out
@@ -90,6 +91,7 @@ const AppNavigator = () => {
                     // presentation: 'modal', // Optionally present as a modal
                   }} 
                 />
+                <Stack.Screen name="ActiveWorkout" component={ActiveWorkoutScreen} options={{ headerShown: true, title: 'Active Workout' }} />
               </>
             ) : (
               // Group onboarding screens if user is not fully onboarded

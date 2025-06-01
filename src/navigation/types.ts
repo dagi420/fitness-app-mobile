@@ -17,6 +17,7 @@ export type RootStackParamList = {
   Profile: undefined;
   ManualPlanCreator: { preSelectedExercises?: BaseExercise[] };
   ExercisePicker: { fromScreen: string };
+  ActiveWorkout: { plan: DisplayableWorkoutPlan };
 };
 
 export type MainTabParamList = {

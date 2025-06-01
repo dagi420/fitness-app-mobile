@@ -12,11 +12,17 @@ A React Native and Expo mobile application designed for a gym company, enabling 
 *   **Workout Browsing:** Display all available workouts from an admin-managed list.
 *   **Workout Details:** View detailed information for each workout, including exercises, sets, reps, and descriptions.
 *   **User-Created Plan Display:** Users can see their saved custom workout plans separately from general workouts.
+*   **Active Workout Session:**
+    *   Guides users through selected workout plans exercise by exercise, set by set.
+    *   Displays current exercise details (name, sets, reps, duration, notes).
+    *   Integrated timer for timed exercises and rest periods (auto-starts for timed exercises).
+    *   Manual timer controls (start/resume, pause, reset).
+    *   Tracks current set and progresses through exercises.
+    *   Placeholder for exercise visuals (image/video).
 *   **Progress Tracking (Future):** Infrastructure planned for tracking user progress.
 *   **Profile Management:** View user profile information and logout.
 *   **Intuitive UI:** Organized navigation with a bottom tab bar and a central "Create Plan" button.
 *   **Clear Data Flow:** Uses React Context for global state management (e.g., authentication) and services for API interactions.
-*   **Active Workout Session (Future):** A dedicated screen for guiding users through an active workout with timers, exercise videos, etc.
 *   **Sharing Plans (Future):** Functionality to share workout/diet plans with peers.
 
 ## Folder Structure
@@ -66,6 +72,7 @@ fitness-app-mobile/
 │   │   ├── Progress/
 │   │   │   └── ProgressScreen.tsx
 │   │   └── Workouts/
+│   │       ├── ActiveWorkoutScreen.tsx
 │   │       ├── WorkoutDetailScreen.tsx
 │   │       └── WorkoutListScreen.tsx
 │   ├── store/                # Global state management (e.g., React Context)
@@ -190,11 +197,11 @@ In the `fitness-app-server` directory:
 ## Future Enhancements / To-Do
 
 *   Implement AI-powered workout and diet planning.
-*   Complete Progress Tracking functionality.
+*   Complete Progress Tracking functionality (save workout session results).
 *   Build out the Diet Plan section.
-*   Develop the Active Workout Session screen (timer, exercise videos, completion tracking).
+*   Enhance Active Workout Session screen (exercise image/video display, sound notifications for timer, workout summary page).
 *   Add functionality to share plans with peers.
-*   Implement visual descriptions/videos for each exercise.
+*   Implement visual descriptions/videos for each exercise in exercise details/picker.
 *   Unit and integration tests.
 *   Refine UI/UX across the application.
 *   Error handling and reporting improvements.

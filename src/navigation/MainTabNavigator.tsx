@@ -87,7 +87,7 @@ const MainTabNavigator = () => {
         tabBarItemStyle: styles.tabBarItemStyle, 
         tabBarIcon: ({ focused, color }) => { // size prop is not used from here if tabBarItemStyle controls it
           let iconName;
-          let iconSize = focused ? 21 : 24;
+          let iconSize = focused ? 24 : 24;
 
           if (route.name === 'Dashboard') {
             iconName = focused ? 'home' : 'home-outline';
@@ -132,7 +132,6 @@ const MainTabNavigator = () => {
       />
       <Tab.Screen name="Diet" component={DietPlanScreen} options={{ title: 'Diet Plan' }} />
       <Tab.Screen name="Progress" component={ProgressScreen} options={{title: "Progress"}}/>
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{title: "Profile"}}/>
     </Tab.Navigator>
   );
 };
@@ -141,8 +140,8 @@ const styles = StyleSheet.create({
   tabBarStyle: {
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 30 : 20, // Adjust for notch/home bar on iOS
-    left: 15,
-    right: 15,
+    left: 25,
+    right: 25,
     backgroundColor: '#FFFFFF',
     borderRadius: 20, // Smoother radius
     height: 65, // Adjusted height
@@ -178,8 +177,8 @@ const styles = StyleSheet.create({
     top: -22, // Adjust this to pull the visual button up
     // left: '50%', // These with transform would center it if parent wasn't full width of slot
     // marginLeft: -30, // Half of its own width
-    width: 60,
-    height: 60,
+    width: 55,
+    height: 55,
     borderRadius: 30,
     backgroundColor: '#007AFF',
     justifyContent: 'center',

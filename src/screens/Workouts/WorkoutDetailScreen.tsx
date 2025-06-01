@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, Button, Alert, TouchableOpacity } from 'react-native';
-import { RouteProp, useRoute } from '@react-navigation/native';
+import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation/types';
 import { Workout, fetchWorkoutById, ExerciseDetail } from '../../api/workoutService';
@@ -12,8 +12,8 @@ import { DisplayableWorkoutPlan } from './WorkoutListScreen';
 // Ensure 'WorkoutDetail: { workoutId: string }' is added to your RootStackParamList
 type WorkoutDetailScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetail'>;
 
-// If you need navigation from this screen, define its prop type
-// type WorkoutDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'WorkoutDetail'>;
+// Define navigation prop for WorkoutDetailScreen to navigate to ActiveWorkoutScreen
+type WorkoutDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'WorkoutDetail'>;
 
 interface WorkoutDetailScreenProps {
   // navigation: WorkoutDetailScreenNavigationProp;
@@ -46,6 +46,7 @@ const ExerciseCard: React.FC<{ exercise: PlannedExercise }> = ({ exercise }) => 
 );
 
 const WorkoutDetailScreen: React.FC<WorkoutDetailScreenProps> = ({ route }) => {
+  const navigation = useNavigation<WorkoutDetailScreenNavigationProp>();
   const { workoutId, planObject } = route.params;
   const { token } = useAuth();
 
@@ -130,9 +131,11 @@ const WorkoutDetailScreen: React.FC<WorkoutDetailScreenProps> = ({ route }) => {
   }
 
   const handleStartWorkout = () => {
-    // TODO: Navigate to ActiveWorkoutScreen, passing the currentPlan
-    Alert.alert("Start Workout", `Starting: ${currentPlan.planName}`);
-    // navigation.navigate('ActiveWorkout', { plan: currentPlan });
+    if (currentPlan) {
+      navigation.navigate('ActiveWorkout', { plan: currentPlan });
+    } else {
+      Alert.alert("Error", "Cannot start workout. Plan details are missing.");
+    }
   };
 
   return (

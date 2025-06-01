@@ -1,217 +1,210 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons'; // For tab icons
-import { View, TouchableOpacity, StyleSheet, Platform, Pressable } from 'react-native'; // Removed Dimensions as it's not critical for docked bar
-import { useNavigation, getFocusedRouteNameFromRoute } from '@react-navigation/native'; // To navigate from tab button and getFocusedRouteNameFromRoute
-import { StackNavigationProp } from '@react-navigation/stack'; // For typing navigation
-import { RootStackParamList } from './types'; // For typing navigation
+import { View, TouchableOpacity, StyleSheet, Platform, Pressable, Text } from 'react-native';
+import { useNavigation, getFocusedRouteNameFromRoute, RouteProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList, MainTabParamList } from './types'; // Use MainTabParamList directly
+import { useAppTheme } from '../styles/useAppTheme'; // Import the theme hook
+import { neumorphicShadowOffset, neumorphicShadowOpacity } from '../styles/theme'; // Import neumorphic styles
 
 // Import your tab screens
 import DashboardScreen from '../screens/MainApp/DashboardScreen';
-import WorkoutListScreen from '../screens/Workouts/WorkoutListScreen';
+// import WorkoutListScreen from '../screens/Workouts/WorkoutListScreen';
 import DietPlanScreen from '../screens/Diet/DietPlanScreen';
 import ProgressScreen from '../screens/Progress/ProgressScreen';
-import ProfileScreen from '../screens/Profile/ProfileScreen';
-import WorkoutsStackNavigator from './WorkoutsStackNavigator'; // Import the new stack navigator
-
-// Define a ParamList for the Tab navigator if you need to type check route names or params for tabs
-export type MainTabParamList = {
-  Dashboard: undefined;
-  Workouts: undefined;
-  // Add a dummy name for the central button's tab. It won't show a screen.
-  CreatePlanTab: undefined; 
-  Diet: undefined;
-  Progress: undefined;
-  Profile: undefined;
-};
-
-const Tab = createBottomTabNavigator<MainTabParamList>();
+// import ProfileScreen from '../screens/Profile/ProfileScreen'; // Profile is usually a stack screen, not a tab itself, or handled by headerRight
+import WorkoutsStackNavigator from './WorkoutsStackNavigator';
+// import AIStackNavigator from './AIStackNavigator'; // Commented out for now
 
 // Define navigation prop type for navigating from the custom tab button
 type RootStackNavigationProp = StackNavigationProp<RootStackParamList>;
 
+const Tab = createBottomTabNavigator<MainTabParamList>();
+
 // Dummy component to assign to the tab screen that only acts as a button
 const DummyScreen = () => null;
 
-const CustomTabBarButton = ({ children, onPress }: { children: React.ReactNode, onPress?: () => void }) => (
-  <TouchableOpacity
-    style={styles.customButtonContainerDocked} // Use new style for docked version
-    onPress={onPress}
-    activeOpacity={0.7} 
-  >
-    <View style={styles.customButtonVisualDocked}>
-      {children}
-    </View>
-  </TouchableOpacity>
-);
+const CustomTabBarButton = ({ children, onPress }: { children: React.ReactNode, onPress?: () => void }) => {
+  const theme = useAppTheme();
+  const styles = createThemedStyles(theme); // Create styles with theme
+
+  return (
+    <TouchableOpacity
+      style={styles.customButtonContainerDocked}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.customButtonVisualDocked}>
+        {children}
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 // Helper function to get the title for the header based on the focused tab
-const getHeaderTitle = (route: any) => {
+const getHeaderTitle = (route: RouteProp<MainTabParamList, keyof MainTabParamList>, theme: ReturnType<typeof useAppTheme>) => {
   const routeName = getFocusedRouteNameFromRoute(route) ?? 'Dashboard';
   switch (routeName) {
     case 'Dashboard':
       return 'Home';
     case 'Workouts':
-    case 'WorkoutsStack': // If your stack navigator is named WorkoutsStack internally
+    case 'WorkoutsStack': // This might be the actual route name from the WorkoutsStackNavigator
       return 'Workouts';
+    // case 'AIPlanner': // Commented out
+    //   return 'AI Planner';
     case 'Diet':
       return 'Diet Plan';
     case 'Progress':
       return 'Progress';
+    // CreatePlanTab does not have a header, so it's not handled here.
+    // Profile is handled by RootStack, not a tab header.
     default:
-      return 'Fitness App'; // Fallback title
+      // Fallback for routeName itself if not matching above
+      //This can happen if getFocusedRouteNameFromRoute returns a screen name from a nested stack
+      if (Object.keys(theme.typography.variants).includes(routeName)) return routeName;
+      return 'Fitness App'; // Default fallback
   }
 };
 
 const MainTabNavigator = () => {
   const navigation = useNavigation<RootStackNavigationProp>();
+  const theme = useAppTheme();
+  const styles = createThemedStyles(theme);
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarShowLabel: true, // Show labels for docked bar
-        tabBarStyle: styles.tabBarStyleDocked, // Use new style for docked bar
-        headerShown: true, // Keep header shown for the profile button
-        headerTitle: getHeaderTitle(route), // Dynamically set header title
+        tabBarShowLabel: true,
+        tabBarStyle: styles.tabBarStyleDocked,
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: theme.currentColors.surface, // Use theme color for header background
+          borderBottomColor: theme.currentColors.border,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+        },
+        headerTitleStyle: {
+          color: theme.currentColors.textPrimary, // Use theme color for header title
+          fontSize: theme.typography.fontSizes.lg,
+          fontWeight: theme.typography.fontWeights.semibold as any,
+        },
+        headerTitleAlign: 'left',
+        headerTitle: getHeaderTitle(route, theme),
         headerRight: () => (
-          <Pressable onPress={() => navigation.navigate('Profile')} style={{ marginRight: 15 }}>
-            <Ionicons name="person-circle-outline" size={28} color="#007AFF" />
+          <Pressable onPress={() => navigation.navigate('Profile')} style={{ marginRight: theme.spacing.md }}>
+            <Ionicons name="person-circle-outline" size={28} color={theme.currentColors.primary} />
           </Pressable>
         ),
-        // Apply a common style to each tab item for consistent spacing
         tabBarItemStyle: styles.tabBarItemStyleDocked,
-        tabBarIcon: ({ focused, color, size }) => { 
-          let iconName;
-          // Using size passed by navigator for docked version
-          // let iconSize = focused ? 26 : 24; 
+        tabBarLabelStyle: {
+            fontSize: theme.typography.fontSizes.xs,
+            fontWeight: theme.typography.fontWeights.medium as any,
+        },
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: keyof typeof Ionicons.glyphMap | undefined = undefined;
+          const iconSize = focused ? size + 1 : size; // Make focused icon slightly larger
 
           if (route.name === 'Dashboard') {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'Workouts') {
             iconName = focused ? 'barbell' : 'barbell-outline';
+          // } else if (route.name === 'AIPlanner') { // Commented out
+          //   iconName = focused ? 'bulb' : 'bulb-outline';
           } else if (route.name === 'Diet') {
             iconName = focused ? 'restaurant' : 'restaurant-outline';
           } else if (route.name === 'Progress') {
             iconName = focused ? 'stats-chart' : 'stats-chart-outline';
           }
-          if (!iconName) return null; // Should not happen for defined routes
-          return <Ionicons name={iconName as any} size={size} color={color} />;
+          // CreatePlanTab has its own icon defined in its options
+          
+          if (!iconName && route.name !== 'CreatePlanTab') { 
+             // Fallback for any unexpected route names, though ideally all tab routes are handled above.
+            console.warn("Unhandled route in TabBarIcon: ", route.name);
+            iconName = 'help-circle-outline'; 
+          }
+
+          return iconName ? <Ionicons name={iconName} size={iconSize} color={color} /> : null;
         },
-        tabBarActiveTintColor: '#007AFF', // A common modern blue
-        tabBarInactiveTintColor: '#8E8E93', // iOS-like inactive color
+        tabBarActiveTintColor: theme.currentColors.tabBarActiveTintColorNeumorphic,
+        tabBarInactiveTintColor: theme.currentColors.tabBarInactiveTintColorNeumorphic,
       })}
     >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Home' }} />
       <Tab.Screen 
-        name="Workouts" 
-        component={WorkoutsStackNavigator} 
-        options={{ tabBarLabel: 'Workouts', title: 'Workouts' }} 
+        name="Dashboard" 
+        component={DashboardScreen} 
+        options={{ 
+          tabBarLabel: "Home", 
+          headerShown: false // This will hide the default header for the Dashboard tab
+        }} 
       />
-      <Tab.Screen // The Central Add Button Tab
-        name="CreatePlanTab"
-        component={DummyScreen} // Use DummyScreen to avoid inline function warning
+      <Tab.Screen name="Workouts" component={WorkoutsStackNavigator} />
+      <Tab.Screen
+        name="CreatePlanTab" // This must be a key in MainTabParamList
+        component={DummyScreen}
         options={{
-          headerShown: false, // No header for the tab itself that is just a button modal
-          tabBarItemStyle: styles.tabBarItemStyleDocked, // Also ensure this item gets its flex space
-          tabBarIcon: ({ color, size }) => ( // Standard icon, color/size will be passed by navigator
-            <Ionicons name="add-circle" size={size + 14} color={color} /> // Make it larger, use theme color
+          headerShown: false,
+          tabBarShowLabel: false, // No label for the central button
+          tabBarItemStyle: styles.tabBarItemStyleDocked, 
+          tabBarIcon: () => ( // Custom icon for the central button
+            <Ionicons name="add-circle" size={theme.typography.fontSizes.h1 + 12} color={theme.currentColors.primary} />
           ),
           tabBarButton: (props) => (
             <CustomTabBarButton
               {...props}
-              onPress={() => navigation.navigate('CreatePlan')}
+              onPress={() => navigation.navigate('CreatePlan')} // Navigate to CreatePlan (RootStack)
             />
           ),
-          // No title for this tab button
         }}
       />
-      <Tab.Screen name="Diet" component={DietPlanScreen} options={{ title: 'Diet Plan' }} />
-      <Tab.Screen name="Progress" component={ProgressScreen} options={{title: "Progress"}}/>
+      <Tab.Screen name="Diet" component={DietPlanScreen} />
+      <Tab.Screen name="Progress" component={ProgressScreen} />
+      {/* <Tab.Screen name="AIPlanner" component={AIStackNavigator} options={{ tabBarLabel: 'AI Plan' }} /> */}
     </Tab.Navigator>
   );
 };
 
-const styles = StyleSheet.create({
+// Create a function to generate styles with the theme, memoize if it becomes complex
+const createThemedStyles = (theme: ReturnType<typeof useAppTheme>) => StyleSheet.create({
   tabBarStyleDocked: {
-    backgroundColor: '#FFFFFF',
-    height: Platform.OS === 'ios' ? 85 : 70, // Standard height, adjust for iOS bottom safe area
-    paddingBottom: Platform.OS === 'ios' ? 20 : 0, // Padding for home indicator on iOS
-    borderTopWidth: 0.5, // Subtle top border
-    borderTopColor: '#E0E0E0',
-    // Removed absolute positioning, shadows, borderRadius, left, right, bottom
+    backgroundColor: theme.currentColors.tabBarBackgroundNeumorphic,
+    height: Platform.OS === 'ios' ? 85 : 70, 
+    paddingBottom: Platform.OS === 'ios' ? theme.spacing.lg : 0, 
+    // Removing default border, Neumorphic shadows will provide separation
+    // borderTopWidth: StyleSheet.hairlineWidth, 
+    // borderTopColor: theme.currentColors.border, 
+
+    // Attempting to add Neumorphic shadows directly to the tab bar
+    // This might not work perfectly due to limitations of styling the native tab bar component
+    // but it's a starting point.
+    shadowColor: theme.currentColors.shadowDark, // Dark shadow
+    shadowOffset: { width: 0, height: -neumorphicShadowOffset.small.height }, // Shadow upwards
+    shadowOpacity: neumorphicShadowOpacity,
+    shadowRadius: neumorphicShadowOffset.small.width, // Radius based on offset
+    elevation: 5, // Basic elevation for Android
   },
   tabBarItemStyleDocked: {
-    // flex: 1, // Default behavior is fine
-    // alignItems: 'center', // Default
-    // justifyContent: 'center', // Default
+    paddingVertical: theme.spacing.xs, // Add some vertical padding for icon and label
   },
-  customButtonContainerDocked: { // For the TouchableOpacity wrapper of the center button
-    flex: 1, 
+  customButtonContainerDocked: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    // Apply some negative margin to make the button appear slightly elevated or overlap if desired
+    marginTop: Platform.OS === 'ios' ? -theme.spacing.xs : -theme.spacing.sm,
   },
-  customButtonVisualDocked: { // For the <View> inside the TouchableOpacity (if needed for more complex styling)
-    // This View can be used if you want the icon container itself to have a background or specific shape
-    // For a simple icon button, this might not be strictly necessary, the icon itself can be styled.
-    // If the icon is large enough, this visual can be minimal or just for alignment.
+  customButtonVisualDocked: {
     alignItems: 'center',
     justifyContent: 'center',
-    // Example: Make it slightly elevated or have a subtle background for the larger icon
-    // width: 60, 
-    // height: 40, 
-    // borderRadius: 10, 
-    // backgroundColor: '#f0f0f0', 
+    width: 60, 
+    height: 60,
+    // backgroundColor and initial borderRadius are provided by getNeumorphicStyles
+    ...theme.shadows.getNeumorphicStyles(theme.currentColors, 'raised', 'small'), 
+    borderRadius: 30, // Explicitly set borderRadius for circular shape AFTER spreading theme styles
+    // The getNeumorphicStyles will set a backgroundColor (theme.currentColors.base).
+    // If a different one is needed (e.g., theme.currentColors.primary), it can be set here:
+    // backgroundColor: theme.currentColors.primary, 
   },
-  // Original floating styles (kept for reference, can be deleted)
-  tabBarStyle: {
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 30 : 20, 
-    left: 25,
-    right: 25,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20, 
-    height: 65, 
-    flexDirection: 'row', 
-    justifyContent: 'space-around', 
-    alignItems: 'center', 
-    paddingHorizontal: 0, 
-    borderTopWidth: 0, 
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -3, 
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 4.0,
-    elevation: 5, 
-  },
-  tabBarItemStyle: {
-    flex: 1, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-  },
-  customButtonContainer: { 
-    flex: 1, 
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-  },
-  customButtonVisual: { 
-    position: 'absolute',
-    top: -22, 
-    width: 55,
-    height: 55,
-    borderRadius: 30,
-    backgroundColor: '#007AFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    alignSelf: 'center', 
-    shadowColor: '#007AFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.0,
-    elevation: 8,
-  },
+  // ... other styles if needed, original floating styles can be removed if not used
 });
 
 export default MainTabNavigator;

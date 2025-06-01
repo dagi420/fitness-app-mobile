@@ -65,9 +65,9 @@ export type RootStackParamList = {
 export type MainTabParamList = {
   Dashboard: undefined;
   Workouts: NavigatorScreenParams<WorkoutsStackParamList>;
+  CreatePlanTab: undefined;
   Diet: { refresh?: boolean };
-  AIPlanner: NavigatorScreenParams<AIPlanStackParamList>;
-  Profile: undefined;
+  Progress: undefined;
 };
 
 export type AuthStackParamList = {

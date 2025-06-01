@@ -42,7 +42,7 @@ const ActiveWorkoutScreen = () => {
   const navigation = useNavigation<ActiveWorkoutScreenNavigationProp>();
   const { plan } = route.params;
   const videoRef = useRef<Video>(null);
-  const timerIdRef = useRef<NodeJS.Timeout | null>(null);
+  const timerIdRef = useRef<number | null>(null);
   const previousPhaseRef = useRef<string | null>(null);
   const isMountedRef = useRef(true);
 

@@ -1,5 +1,5 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
-import { ExerciseDetail } from '../api/workoutService';
+import { Workout, ExerciseDetail } from '../api/workoutService';
 import { BaseExercise } from '../screens/Planner/ManualPlanCreatorScreen';
 import { DisplayableWorkoutPlan } from '../screens/Workouts/WorkoutListScreen';
 import { FoodItem } from '../api/dietService';
@@ -26,13 +26,12 @@ export interface AIWorkoutConfigData {
 }
 
 export type WorkoutsStackParamList = {
+  WorkoutsHome: undefined;
   WorkoutList: undefined;
-  WorkoutDetail: { workoutId?: string; planObject?: DisplayableWorkoutPlan };
-  ManualPlanCreator: { preSelectedExercises?: BaseExercise[] };
-  ExercisePicker: { fromScreen: string };
-  ActiveWorkout: { plan: DisplayableWorkoutPlan };
+  WorkoutDetail: { workout: DisplayableWorkoutPlan };
+  ActiveWorkout: { plan: UserWorkoutPlan };
   ExerciseLibrary: undefined;
-  ExerciseDetail: { exercise: BaseExercise };
+  ExerciseDetail: { exercise: ExerciseDetail };
 };
 
 export type RootStackParamList = {

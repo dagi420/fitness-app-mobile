@@ -7,6 +7,7 @@ import { Workout, fetchWorkoutById, ExerciseDetail } from '../../api/workoutServ
 import { useAuth } from '../../store/AuthContext';
 import { PlannedExercise, BaseExercise } from '../Planner/ManualPlanCreatorScreen';
 import { DisplayableWorkoutPlan } from './WorkoutListScreen';
+import { UserWorkoutPlan } from '../../api/planService';
 
 // Define the param list for this screen using the correct Stack a
 // type WorkoutDetailScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetail'>;
@@ -49,78 +50,22 @@ const WorkoutDetailScreen: React.FC<WorkoutDetailScreenProps> = ({ route }) => {
   const navigation = useNavigation<WorkoutDetailScreenNavigationProp>();
   const { token } = useAuth();
 
-  const planObjectFromParams = useMemo(() => route.params.planObject, [route.params.planObject]);
-  const workoutIdFromParams = useMemo(() => route.params.workoutId, [route.params.workoutId]);
-
+  const planObjectFromParams = useMemo(() => route.params.workout, [route.params.workout]);
   const [currentPlan, setCurrentPlan] = useState<DisplayableWorkoutPlan | null>(null);
   const [isLoading, setIsLoading] = useState(true); // Start true as we always attempt to load
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
-      setIsLoading(true);      // Set loading true at the start of any load attempt
-      setError(null);        // Clear previous errors
-      // setCurrentPlan(null); // Clear previous plan; a new plan will be set or it remains null if error/no data
-                            // Decided to set currentPlan to null only if there's an actual attempt to load new data
-                            // or if dependencies indicate a change.
-                            // If planObjectFromParams is present, it *is* the new data.
+      setIsLoading(true);
+      setError(null);
 
       try {
         if (planObjectFromParams) {
-          // If a plan object is passed directly, it's the source of truth.
           setCurrentPlan(planObjectFromParams);
-        } else if (workoutIdFromParams && token) {
-          // Fetch by ID if no planObject was passed.
-          setCurrentPlan(null); // Clear any old plan before fetching new one
-          const response = await fetchWorkoutById(workoutIdFromParams, token);
-          if (response.success && response.workout) {
-            const fetchedApiWorkout = response.workout;
-            const mappedExercises: PlannedExercise[] = fetchedApiWorkout.exercises.map((ex: ExerciseDetail, index: number): PlannedExercise => ({
-              _id: ex._id || `${fetchedApiWorkout._id}_ex_${index}`,
-              name: ex.name,
-              type: ex.type || 'N/A',
-              category: (ex as any).category || 'General',
-              difficulty: ex.difficulty || 'N/A',
-              targetMuscleGroups: ex.muscleGroups || [],
-              equipment: ex.equipment || undefined,
-              description: ex.description || undefined,
-              videoUrl: ex.videoUrl || undefined,
-              imageUrl: ex.imageUrl || undefined,
-              instructions: ex.instructions || undefined,
-              sets: ex.sets !== undefined ? String(ex.sets) : undefined,
-              reps: ex.reps !== undefined ? String(ex.reps) : undefined,
-              durationSeconds: ex.durationSeconds || undefined,
-              order: ex.order !== undefined ? ex.order : index,
-            }));
-            setCurrentPlan({
-              _id: fetchedApiWorkout._id,
-              planName: fetchedApiWorkout.name,
-              exercises: mappedExercises,
-              description: fetchedApiWorkout.description,
-              type: fetchedApiWorkout.type,
-              difficulty: fetchedApiWorkout.difficulty,
-              durationEstimateMinutes: fetchedApiWorkout.durationEstimateMinutes,
-              createdAt: (fetchedApiWorkout as any).createdAt || new Date().toISOString(),
-              updatedAt: (fetchedApiWorkout as any).updatedAt || new Date().toISOString(),
-              isAIGenerated: false, // General workouts fetched by ID are not AI generated
-            });
-          } else {
-            setError(response.message || 'Failed to load workout details.');
-            setCurrentPlan(null); // Ensure no stale plan is shown
-          }
-        } else if (!token && !planObjectFromParams && workoutIdFromParams) {
-            setError('Authentication required to fetch workout details.');
-            setCurrentPlan(null);
-        } else if (!planObjectFromParams && !workoutIdFromParams) {
-            setError('Workout ID or Plan Object not provided.');
-            setCurrentPlan(null);
         } else {
-            // This case means planObjectFromParams is null, and workoutIdFromParams might be null or token is null.
-            // If planObjectFromParams was initially null and no workoutId, this is covered.
-            // If dependencies change such that these become null later, we should clear the plan.
-            setCurrentPlan(null);
-            // If no error was set above but we can't load data, ensure a generic message or rely on UI for !currentPlan
-            if (!error) setError("Cannot display workout details."); 
+          setError('Workout details not provided.');
+          setCurrentPlan(null);
         }
       } catch (err) {
         console.error("Error loading workout details:", err);
@@ -132,12 +77,11 @@ const WorkoutDetailScreen: React.FC<WorkoutDetailScreenProps> = ({ route }) => {
     };
 
     loadData();
-
-  }, [workoutIdFromParams, planObjectFromParams, token]); // Effect dependencies
+  }, [planObjectFromParams]);
 
   const handleRetry = () => {
     // To retry, we simply re-trigger the loading process defined in useEffect.
-    // The useEffect will run because its dependencies (workoutIdFromParams, planObjectFromParams, token)
+    // The useEffect will run because its dependencies (planObjectFromParams, token)
     // will be the same, but we reset the component's state to initiate the load sequence again.
     setIsLoading(true);
     setError(null);
@@ -171,7 +115,13 @@ const WorkoutDetailScreen: React.FC<WorkoutDetailScreenProps> = ({ route }) => {
 
   const handleStartWorkout = () => {
     if (currentPlan) {
-      navigation.navigate('ActiveWorkout', { plan: currentPlan });
+      // Convert DisplayableWorkoutPlan to UserWorkoutPlan
+      const workoutPlan: UserWorkoutPlan = {
+        ...currentPlan,
+        userId: '', // This will be handled by the backend
+        isAIgenerated: currentPlan.isAIGenerated || false
+      };
+      navigation.navigate('ActiveWorkout', { plan: workoutPlan });
     } else {
       Alert.alert("Error", "Cannot start workout. Plan details are missing.");
     }

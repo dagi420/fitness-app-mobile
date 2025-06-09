@@ -193,7 +193,7 @@ const WorkoutListScreen = () => {
 
   const handleWorkoutPress = (plan: DisplayableWorkoutPlan) => {
     if (plan._id) {
-        navigation.navigate('WorkoutDetail', { planObject: plan });
+        navigation.navigate('WorkoutDetail', { workout: plan });
     } else {
         Alert.alert("Error", "Workout data is incomplete.");
     }

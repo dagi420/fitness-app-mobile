@@ -19,7 +19,8 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.16.0",
-    "multer": "^2.0.0"
+    "multer": "^2.0.0",
+    "react-native-youtube-iframe": "^2.3.0"
   },
   "devDependencies": {
     "@types/multer": "^1.4.12",

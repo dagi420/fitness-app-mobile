@@ -3,188 +3,381 @@ import {
   View,
   Text,
   StyleSheet,
-  SectionList,
-  ActivityIndicator,
+  FlatList,
   TouchableOpacity,
   SafeAreaView,
-  Alert,
+  ActivityIndicator,
+  ScrollView,
+  Image,
+  Dimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { WorkoutsStackParamList } from '../../navigation/types'; // Assuming it will be part of WorkoutsStack
-import { BaseExercise } from '../Planner/ManualPlanCreatorScreen'; // Re-use BaseExercise type
+import { WorkoutsStackParamList } from '../../navigation/types';
+import { BaseExercise } from '../Planner/ManualPlanCreatorScreen';
 import { fetchAllIndividualExercises } from '../../api/exerciseService';
+import { ExerciseDetail } from '../../api/workoutService';
 import { useAuth } from '../../store/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
+import { useAppTheme } from '../../styles/useAppTheme';
 
-// Navigation prop for this screen
+const { width } = Dimensions.get('window');
+
 type ExerciseLibraryNavigationProp = StackNavigationProp<WorkoutsStackParamList, 'ExerciseLibrary'>;
 
-// Section type for SectionList (grouped by exercise.type)
-interface ExerciseTypeSection {
-  title: string; // Exercise Type (e.g., Strength, Cardio)
-  data: BaseExercise[];
-}
+// Define muscle groups for the filter
+const MUSCLE_GROUPS = [
+  'All',
+  'Chest',
+  'Back',
+  'Shoulders',
+  'Arms',
+  'Legs',
+  'Core',
+  'Full Body',
+  'Cardio'
+] as const;
+
+const DIFFICULTIES = ['All', 'Beginner', 'Intermediate', 'Advanced'] as const;
 
 const ExerciseLibraryScreen = () => {
   const navigation = useNavigation<ExerciseLibraryNavigationProp>();
   const { token } = useAuth();
+  const theme = useAppTheme();
 
-  const [allExercises, setAllExercises] = useState<BaseExercise[]>([]);
+  const [exercises, setExercises] = useState<BaseExercise[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<typeof MUSCLE_GROUPS[number]>('All');
+  const [selectedDifficulty, setSelectedDifficulty] = useState<typeof DIFFICULTIES[number]>('All');
 
   useEffect(() => {
-    const loadExercises = async () => {
-      if (!token) {
-        setError('Authentication token not found.');
-        setIsLoading(false);
-        return;
-      }
-      try {
-        setIsLoading(true);
-        setError(null);
-        const response = await fetchAllIndividualExercises(token);
-        if (response.success && response.exercises) {
-          setAllExercises(response.exercises);
-        } else {
-          setError(response.message || 'Failed to load exercises.');
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
     loadExercises();
   }, [token]);
 
-  const exerciseSections = useMemo(() => {
-    if (allExercises.length === 0) return [];
+  const loadExercises = async () => {
+    if (!token) {
+      setError('Authentication required');
+      setIsLoading(false);
+      return;
+    }
 
-    const grouped: { [key: string]: BaseExercise[] } = {};
-    allExercises.forEach(exercise => {
-      const type = exercise.type || 'Uncategorized'; // Default if type is missing
-      if (!grouped[type]) {
-        grouped[type] = [];
+    try {
+      const response = await fetchAllIndividualExercises(token);
+      if (response.success && response.exercises) {
+        setExercises(response.exercises);
+      } else {
+        setError(response.message || 'Failed to load exercises');
       }
-      grouped[type].push(exercise);
-    });
-
-    return Object.keys(grouped)
-      .map(type => ({
-        title: type,
-        // Safeguard sorting for exercises: default to empty string if name is missing
-        data: grouped[type].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
-      }))
-      // Safeguard sorting for sections: default to empty string if title is missing (though less likely here)
-      .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-  }, [allExercises]);
-
-  const handleExercisePress = (exercise: BaseExercise) => {
-    // Navigate to ExerciseDetailScreen (to be created)
-    navigation.navigate('ExerciseDetail', { exercise });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const renderExerciseItem = ({ item }: { item: BaseExercise }) => (
-    <TouchableOpacity onPress={() => handleExercisePress(item)} style={styles.itemContainer}>
-      <View style={styles.itemTextContainer}>
-        <Text style={styles.itemName}>{item.name}</Text>
-        <Text style={styles.itemSubDetail}>Category: {item.category} | Difficulty: {item.difficulty}</Text>
-        {item.targetMuscleGroups && item.targetMuscleGroups.length > 0 && (
-          <Text style={styles.itemSubDetail}>Muscles: {item.targetMuscleGroups.join(', ')}</Text>
-        )}
+  const filteredExercises = useMemo(() => {
+    return exercises.filter(exercise => {
+      const matchesMuscleGroup = selectedMuscleGroup === 'All' || 
+        exercise.targetMuscleGroups?.includes(selectedMuscleGroup);
+      const matchesDifficulty = selectedDifficulty === 'All' || 
+        exercise.difficulty === selectedDifficulty;
+      return matchesMuscleGroup && matchesDifficulty;
+    });
+  }, [exercises, selectedMuscleGroup, selectedDifficulty]);
+
+  const renderMuscleGroupFilter = () => (
+    <ScrollView 
+      horizontal 
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.filterContainer}
+    >
+      {MUSCLE_GROUPS.map((group) => (
+        <TouchableOpacity
+          key={group}
+          style={[
+            styles.filterButton,
+            selectedMuscleGroup === group && styles.filterButtonActive,
+            { backgroundColor: theme.currentColors.surface }
+          ]}
+          onPress={() => setSelectedMuscleGroup(group)}
+        >
+          <Text 
+            style={[
+              styles.filterButtonText,
+              selectedMuscleGroup === group && styles.filterButtonTextActive,
+              { color: selectedMuscleGroup === group ? theme.currentColors.primary : theme.currentColors.textSecondary }
+            ]}
+          >
+            {group}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+
+  const renderDifficultyFilter = () => (
+    <ScrollView 
+      horizontal 
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.filterContainer}
+    >
+      {DIFFICULTIES.map((difficulty) => (
+        <TouchableOpacity
+          key={difficulty}
+          style={[
+            styles.filterButton,
+            selectedDifficulty === difficulty && styles.filterButtonActive,
+            { backgroundColor: theme.currentColors.surface }
+          ]}
+          onPress={() => setSelectedDifficulty(difficulty)}
+        >
+          <Text 
+            style={[
+              styles.filterButtonText,
+              selectedDifficulty === difficulty && styles.filterButtonTextActive,
+              { color: selectedDifficulty === difficulty ? theme.currentColors.primary : theme.currentColors.textSecondary }
+            ]}
+          >
+            {difficulty}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+
+  const renderExerciseCard = ({ item }: { item: BaseExercise }) => (
+    <TouchableOpacity
+      style={[styles.exerciseCard, { backgroundColor: theme.currentColors.surface }]}
+      onPress={() => {
+        const exerciseDetail: ExerciseDetail = {
+          _id: item._id,
+          name: item.name,
+          description: item.description || '',
+          muscleGroups: item.targetMuscleGroups || [],
+          equipment: item.equipment,
+          difficulty: item.difficulty as "Beginner" | "Intermediate" | "Advanced" | undefined,
+          instructions: item.instructions,
+          imageUrl: item.imageUrl,
+          videoUrl: item.videoUrl
+        };
+        navigation.navigate('ExerciseDetail', { exercise: exerciseDetail });
+      }}
+    >
+      {item.imageUrl ? (
+        <Image source={{ uri: item.imageUrl }} style={styles.exerciseImage} />
+      ) : (
+        <View style={[styles.placeholderImage, { backgroundColor: theme.currentColors.border }]}>
+          <Ionicons name="barbell-outline" size={40} color={theme.currentColors.textSecondary} />
+        </View>
+      )}
+      <View style={styles.exerciseInfo}>
+        <Text style={[styles.exerciseName, { color: theme.currentColors.textPrimary }]}>
+          {item.name}
+        </Text>
+        <Text style={[styles.exerciseDetail, { color: theme.currentColors.textSecondary }]}>
+          {item.targetMuscleGroups?.join(', ')}
+        </Text>
+        <View style={styles.exerciseMetadata}>
+          <Text style={[styles.exerciseMetadataText, { color: theme.currentColors.textSecondary }]}>
+            {item.difficulty}
+          </Text>
+          {item.equipment && (
+            <Text style={[styles.exerciseMetadataText, { color: theme.currentColors.textSecondary }]}>
+              • {item.equipment}
+            </Text>
+          )}
+        </View>
       </View>
-      {/* Add an icon or chevron for navigation indication if desired */}
+      <Ionicons 
+        name="chevron-forward" 
+        size={24} 
+        color={theme.currentColors.textSecondary} 
+        style={styles.chevron}
+      />
     </TouchableOpacity>
   );
 
   if (isLoading) {
-    return <SafeAreaView style={styles.centered}><ActivityIndicator size="large" /></SafeAreaView>;
+    return (
+      <SafeAreaView style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={theme.currentColors.primary} />
+      </SafeAreaView>
+    );
   }
 
   if (error) {
-    return <SafeAreaView style={styles.centered}><Text style={styles.errorText}>{error}</Text></SafeAreaView>;
+    return (
+      <SafeAreaView style={[styles.container, styles.centered]}>
+        <Text style={[styles.errorText, { color: theme.currentColors.error }]}>{error}</Text>
+        <TouchableOpacity 
+          style={[styles.retryButton, { backgroundColor: theme.currentColors.primary }]}
+          onPress={loadExercises}
+        >
+          <Text style={[styles.retryButtonText, { color: theme.currentColors.surface }]}>
+            Retry
+          </Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Text style={styles.screenTitle}>Exercise Library</Text>
-      <SectionList
-        sections={exerciseSections}
-        renderItem={renderExerciseItem}
-        renderSectionHeader={({ section: { title } }) => (
-          <Text style={styles.sectionHeader}>{title}</Text>
-        )}
-        keyExtractor={(item, index) => item._id + index.toString()}
-        ListEmptyComponent={<View style={styles.centered}><Text>No exercises found.</Text></View>}
-        contentContainerStyle={styles.listContainer}
-        stickySectionHeadersEnabled={false}
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.currentColors.background }]}>
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: theme.currentColors.textPrimary }]}>
+          Exercise Library
+        </Text>
+      </View>
+      
+      <View style={styles.filtersSection}>
+        {renderMuscleGroupFilter()}
+        {renderDifficultyFilter()}
+      </View>
+
+      <FlatList
+        data={filteredExercises}
+        renderItem={renderExerciseCard}
+        keyExtractor={(item) => item._id}
+        contentContainerStyle={styles.exerciseList}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons 
+              name="fitness-outline" 
+              size={48} 
+              color={theme.currentColors.textSecondary} 
+            />
+            <Text style={[styles.emptyStateText, { color: theme.currentColors.textSecondary }]}>
+              No exercises found for selected filters
+            </Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: '#f0f2f5', // Light background for the library
   },
   centered: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
   },
-  errorText: {
-    color: 'red',
+  header: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  filtersSection: {
+    paddingVertical: 8,
+  },
+  filterContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  filterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  filterButtonActive: {
+    borderColor: 'transparent',
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  filterButtonTextActive: {
+    fontWeight: '600',
+  },
+  exerciseList: {
+    padding: 16,
+  },
+  exerciseCard: {
+    flexDirection: 'row',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  exerciseImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+  },
+  placeholderImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exerciseInfo: {
+    flex: 1,
+    marginLeft: 12,
+    justifyContent: 'center',
+  },
+  exerciseName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  exerciseDetail: {
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  exerciseMetadata: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  exerciseMetadataText: {
+    fontSize: 12,
+    marginRight: 8,
+  },
+  chevron: {
+    alignSelf: 'center',
+    marginLeft: 8,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  emptyStateText: {
+    marginTop: 16,
     fontSize: 16,
     textAlign: 'center',
   },
-  screenTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  errorText: {
+    fontSize: 16,
+    marginBottom: 16,
     textAlign: 'center',
-    paddingVertical: 15,
-    color: '#333',
-    backgroundColor: '#fff', // White background for title bar
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
   },
-  listContainer: {
-    paddingBottom: 20,
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
   },
-  sectionHeader: {
-    fontSize: 20,
-    fontWeight: '600', // Semi-bold for section titles
-    color: '#fff', // White text
-    backgroundColor: '#007AFF', // Primary app color for section headers
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    marginTop: 10, // Space between sections
-  },
-  itemContainer: {
-    backgroundColor: '#fff', // White background for items
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee', // Lighter border for items
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  itemTextContainer: {
-    flex: 1,
-  },
-  itemName: {
-    fontSize: 17,
-    fontWeight: '500', // Medium weight for item names
-    color: '#333',
-    marginBottom: 5,
-  },
-  itemSubDetail: {
-    fontSize: 14,
-    color: '#555', // Slightly darker grey for sub-details
-    marginTop: 2,
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

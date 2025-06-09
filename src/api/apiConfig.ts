@@ -3,4 +3,4 @@
 // Use your machine's network IP address if testing on a physical device.
 
 // Ensure this matches the IP you are successfully using for authService
-export const API_BASE_URL = 'http://192.168.106.103:3000/api'; // Example, use your actual working IP 
+export const API_BASE_URL = 'http://192.168.171.3:3000/api'; // Example, use your actual working IP 

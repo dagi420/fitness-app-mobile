@@ -13,6 +13,7 @@ import {
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { WorkoutsStackParamList } from '../../navigation/types';
+import { Exercise } from '../../api/exerciseService';
 import { useAppTheme } from '../../styles/useAppTheme';
 import { Ionicons } from '@expo/vector-icons';
 import YoutubePlayer from 'react-native-youtube-iframe';
@@ -27,7 +28,7 @@ const ExerciseDetailScreen = () => {
   const route = useRoute<ExerciseDetailScreenRouteProp>();
   const navigation = useNavigation<ExerciseDetailScreenNavigationProp>();
   const theme = useAppTheme();
-  const { exercise } = route.params;
+  const { exercise } = route.params as { exercise: Exercise };
 
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -38,7 +39,7 @@ const ExerciseDetailScreen = () => {
     return match && match[2].length === 11 ? match[2] : null;
   };
 
-  const videoId = exercise.videoUrl ? getYoutubeVideoId(exercise.videoUrl) : null;
+  const videoId = exercise.mediaUrls?.video ? getYoutubeVideoId(exercise.mediaUrls.video) : null;
 
   const handleVideoError = () => {
     console.log('Error loading video');
@@ -121,26 +122,46 @@ const ExerciseDetailScreen = () => {
 
         {/* Metadata Section */}
         <View style={[styles.metadataContainer, { backgroundColor: theme.currentColors.surface }]}>
-          {renderMetadataItem('barbell-outline', 'Equipment', exercise.equipment)}
-          {renderMetadataItem('fitness-outline', 'Target Muscles', exercise.muscleGroups)}
-          {renderMetadataItem('speedometer-outline', 'Difficulty', exercise.difficulty)}
-          {renderMetadataItem('fitness-outline', 'Type', exercise.type)}
+          {exercise.equipmentNeeded?.length > 0 && renderMetadataItem('barbell-outline', 'Equipment', exercise.equipmentNeeded)}
+          {exercise.targetMuscleGroups?.length > 0 && renderMetadataItem('fitness-outline', 'Primary Muscles', exercise.targetMuscleGroups)}
+          {exercise.secondaryMuscleGroups && exercise.secondaryMuscleGroups.length > 0 && renderMetadataItem('body-outline', 'Secondary Muscles', exercise.secondaryMuscleGroups)}
+          {exercise.difficulty && renderMetadataItem('speedometer-outline', 'Difficulty', exercise.difficulty)}
+          {exercise.type && renderMetadataItem('fitness-outline', 'Type', exercise.type)}
+          {exercise.metadata?.recommendedRestPeriod && renderMetadataItem('time-outline', 'Rest Period', exercise.metadata.recommendedRestPeriod)}
+          {exercise.metadata?.averageCaloriesBurn && renderMetadataItem('flame-outline', 'Calories/min', exercise.metadata.averageCaloriesBurn.toString())}
         </View>
 
         {/* Description Section */}
-        {exercise.description && (
+        {(exercise.description?.full || exercise.description?.short) && (
           <View style={[styles.section, { backgroundColor: theme.currentColors.surface }]}>
             <Text style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
               Description
             </Text>
             <Text style={[styles.description, { color: theme.currentColors.textSecondary }]}>
-              {exercise.description}
+              {exercise.description.full || exercise.description.short}
             </Text>
           </View>
         )}
 
+        {/* Benefits Section */}
+        {exercise.description?.benefits?.length > 0 && (
+          <View style={[styles.section, { backgroundColor: theme.currentColors.surface }]}>
+            <Text style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
+              Benefits
+            </Text>
+            {exercise.description.benefits.map((benefit, index) => (
+              <View key={index} style={styles.bulletPoint}>
+                <Text style={[styles.bullet, { color: theme.currentColors.primary }]}>•</Text>
+                <Text style={[styles.bulletText, { color: theme.currentColors.textSecondary }]}>
+                  {benefit}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Instructions Section */}
-        {exercise.instructions && exercise.instructions.length > 0 && (
+        {exercise.instructions?.length > 0 && (
           <View style={[styles.section, { backgroundColor: theme.currentColors.surface }]}>
             <Text style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
               Instructions
@@ -155,6 +176,103 @@ const ExerciseDetailScreen = () => {
                 </Text>
               </View>
             ))}
+          </View>
+        )}
+
+        {/* Common Mistakes Section */}
+        {exercise.description?.commonMistakes?.length > 0 && (
+          <View style={[styles.section, { backgroundColor: theme.currentColors.surface }]}>
+            <Text style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
+              Common Mistakes to Avoid
+            </Text>
+            {exercise.description.commonMistakes.map((mistake, index) => (
+              <View key={index} style={styles.bulletPoint}>
+                <Text style={[styles.bullet, { color: theme.currentColors.error }]}>⚠</Text>
+                <Text style={[styles.bulletText, { color: theme.currentColors.textSecondary }]}>
+                  {mistake}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Modifications Section */}
+        {(exercise.modifications?.easier?.length > 0 || exercise.modifications?.harder?.length > 0) && (
+          <View style={[styles.section, { backgroundColor: theme.currentColors.surface }]}>
+            <Text style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
+              Exercise Variations
+            </Text>
+            {exercise.modifications?.easier?.length > 0 && (
+              <View style={styles.variationGroup}>
+                <Text style={[styles.variationTitle, { color: theme.currentColors.success }]}>
+                  Easier Variations:
+                </Text>
+                {exercise.modifications.easier.map((mod, index) => (
+                  <View key={index} style={styles.bulletPoint}>
+                    <Text style={[styles.bullet, { color: theme.currentColors.success }]}>•</Text>
+                    <Text style={[styles.bulletText, { color: theme.currentColors.textSecondary }]}>
+                      {mod}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {exercise.modifications?.harder?.length > 0 && (
+              <View style={styles.variationGroup}>
+                <Text style={[styles.variationTitle, { color: theme.currentColors.error }]}>
+                  Advanced Variations:
+                </Text>
+                {exercise.modifications.harder.map((mod, index) => (
+                  <View key={index} style={styles.bulletPoint}>
+                    <Text style={[styles.bullet, { color: theme.currentColors.error }]}>•</Text>
+                    <Text style={[styles.bulletText, { color: theme.currentColors.textSecondary }]}>
+                      {mod}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Recommended Sets Section */}
+        {exercise.recommendedSets && (
+          <View style={[styles.section, { backgroundColor: theme.currentColors.surface }]}>
+            <Text style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
+              Recommended Sets & Reps
+            </Text>
+            <View style={styles.recommendedSets}>
+              {exercise.recommendedSets.beginner && (
+                <View style={styles.recommendedLevel}>
+                  <Text style={[styles.levelTitle, { color: theme.currentColors.success }]}>
+                    Beginner
+                  </Text>
+                  <Text style={[styles.levelDetail, { color: theme.currentColors.textSecondary }]}>
+                    {exercise.recommendedSets.beginner}
+                  </Text>
+                </View>
+              )}
+              {exercise.recommendedSets.intermediate && (
+                <View style={styles.recommendedLevel}>
+                  <Text style={[styles.levelTitle, { color: theme.currentColors.warning }]}>
+                    Intermediate
+                  </Text>
+                  <Text style={[styles.levelDetail, { color: theme.currentColors.textSecondary }]}>
+                    {exercise.recommendedSets.intermediate}
+                  </Text>
+                </View>
+              )}
+              {exercise.recommendedSets.advanced && (
+                <View style={styles.recommendedLevel}>
+                  <Text style={[styles.levelTitle, { color: theme.currentColors.error }]}>
+                    Advanced
+                  </Text>
+                  <Text style={[styles.levelDetail, { color: theme.currentColors.textSecondary }]}>
+                    {exercise.recommendedSets.advanced}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
         )}
       </ScrollView>
@@ -263,6 +381,44 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     lineHeight: 24,
+  },
+  bulletPoint: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    alignItems: 'flex-start',
+  },
+  bullet: {
+    fontSize: 16,
+    marginRight: 8,
+    width: 16,
+  },
+  bulletText: {
+    flex: 1,
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  variationGroup: {
+    marginBottom: 16,
+  },
+  variationTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  recommendedSets: {
+    marginTop: 8,
+  },
+  recommendedLevel: {
+    marginBottom: 12,
+  },
+  levelTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  levelDetail: {
+    fontSize: 14,
+    lineHeight: 20,
   },
 });
 

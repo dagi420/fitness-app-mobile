@@ -14,9 +14,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { WorkoutsStackParamList } from '../../navigation/types';
-import { BaseExercise } from '../Planner/ManualPlanCreatorScreen';
-import { fetchAllIndividualExercises } from '../../api/exerciseService';
-import { ExerciseDetail } from '../../api/workoutService';
+import { Exercise, fetchAllExercises } from '../../api/exerciseService';
 import { useAuth } from '../../store/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../styles/useAppTheme';
@@ -25,17 +23,17 @@ const { width } = Dimensions.get('window');
 
 type ExerciseLibraryNavigationProp = StackNavigationProp<WorkoutsStackParamList, 'ExerciseLibrary'>;
 
-// Define muscle groups for the filter
+// Define muscle groups for the filter - updated to match our new database
 const MUSCLE_GROUPS = [
   'All',
-  'Chest',
-  'Back',
-  'Shoulders',
-  'Arms',
-  'Legs',
+  'Upper Body',
+  'Lower Body',
   'Core',
+  'Cardio',
   'Full Body',
-  'Cardio'
+  'Flexibility',
+  'Plyometrics',
+  'Olympic'
 ] as const;
 
 const DIFFICULTIES = ['All', 'Beginner', 'Intermediate', 'Advanced'] as const;
@@ -45,7 +43,7 @@ const ExerciseLibraryScreen = () => {
   const { token } = useAuth();
   const theme = useAppTheme();
 
-  const [exercises, setExercises] = useState<BaseExercise[]>([]);
+  const [exercises, setExercises] = useState<Exercise[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<typeof MUSCLE_GROUPS[number]>('All');
@@ -63,7 +61,7 @@ const ExerciseLibraryScreen = () => {
     }
 
     try {
-      const response = await fetchAllIndividualExercises(token);
+      const response = await fetchAllExercises(token);
       if (response.success && response.exercises) {
         setExercises(response.exercises);
       } else {
@@ -79,7 +77,8 @@ const ExerciseLibraryScreen = () => {
   const filteredExercises = useMemo(() => {
     return exercises.filter(exercise => {
       const matchesMuscleGroup = selectedMuscleGroup === 'All' || 
-        exercise.targetMuscleGroups?.includes(selectedMuscleGroup);
+        exercise.category === selectedMuscleGroup ||
+        (exercise.targetMuscleGroups && exercise.targetMuscleGroups.some(group => group === selectedMuscleGroup));
       const matchesDifficulty = selectedDifficulty === 'All' || 
         exercise.difficulty === selectedDifficulty;
       return matchesMuscleGroup && matchesDifficulty;
@@ -146,26 +145,13 @@ const ExerciseLibraryScreen = () => {
     </ScrollView>
   );
 
-  const renderExerciseCard = ({ item }: { item: BaseExercise }) => (
+  const renderExerciseCard = ({ item }: { item: Exercise }) => (
     <TouchableOpacity
       style={[styles.exerciseCard, { backgroundColor: theme.currentColors.surface }]}
-      onPress={() => {
-        const exerciseDetail: ExerciseDetail = {
-          _id: item._id,
-          name: item.name,
-          description: item.description || '',
-          muscleGroups: item.targetMuscleGroups || [],
-          equipment: item.equipment,
-          difficulty: item.difficulty as "Beginner" | "Intermediate" | "Advanced" | undefined,
-          instructions: item.instructions,
-          imageUrl: item.imageUrl,
-          videoUrl: item.videoUrl
-        };
-        navigation.navigate('ExerciseDetail', { exercise: exerciseDetail });
-      }}
+      onPress={() => navigation.navigate('ExerciseDetail', { exercise: item })}
     >
-      {item.imageUrl ? (
-        <Image source={{ uri: item.imageUrl }} style={styles.exerciseImage} />
+      {item.mediaUrls?.image ? (
+        <Image source={{ uri: item.mediaUrls.image }} style={styles.exerciseImage} />
       ) : (
         <View style={[styles.placeholderImage, { backgroundColor: theme.currentColors.border }]}>
           <Ionicons name="barbell-outline" size={40} color={theme.currentColors.textSecondary} />
@@ -176,15 +162,15 @@ const ExerciseLibraryScreen = () => {
           {item.name}
         </Text>
         <Text style={[styles.exerciseDetail, { color: theme.currentColors.textSecondary }]}>
-          {item.targetMuscleGroups?.join(', ')}
+          {item.targetMuscleGroups?.join(', ') || 'No muscle groups specified'}
         </Text>
         <View style={styles.exerciseMetadata}>
           <Text style={[styles.exerciseMetadataText, { color: theme.currentColors.textSecondary }]}>
-            {item.difficulty}
+            {item.difficulty || 'No difficulty specified'}
           </Text>
-          {item.equipment && (
+          {item.equipmentNeeded?.length > 0 && (
             <Text style={[styles.exerciseMetadataText, { color: theme.currentColors.textSecondary }]}>
-              • {item.equipment}
+              • {item.equipmentNeeded.join(', ')}
             </Text>
           )}
         </View>

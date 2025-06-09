@@ -1,31 +1,97 @@
-import { API_BASE_URL } from './apiConfig';
-import { BaseExercise } from '../screens/Planner/ManualPlanCreatorScreen'; // Import BaseExercise type
+import { API_BASE_URL } from '../api/apiConfig';
 
-interface FetchAllExercisesResponse {
-  success: boolean;
-  exercises?: BaseExercise[];
-  message?: string;
+// Types matching our new database structure
+export interface ExerciseMetadata {
+  averageCaloriesBurn: number;
+  recommendedRestPeriod: string;
+  recommendedTempoInSeconds: {
+    eccentric: number;
+    isometricBottom: number;
+    concentric: number;
+    isometricTop: number;
+  };
 }
 
-export const fetchAllIndividualExercises = async (token: string): Promise<FetchAllExercisesResponse> => {
+export interface ExerciseMediaUrls {
+  image?: string;
+  video?: string;
+  thumbnail?: string;
+  gif?: string;
+}
+
+export interface ExerciseModifications {
+  easier: string[];
+  harder: string[];
+}
+
+export interface RecommendedSets {
+  beginner: string;
+  intermediate: string;
+  advanced: string;
+}
+
+export interface Exercise {
+  _id: string;
+  name: string;
+  type: string;
+  category: string;
+  difficulty: string;
+  targetMuscleGroups: string[];
+  equipmentNeeded: string[];
+  description: {
+    short: string;
+    full: string;
+    benefits: string[];
+    commonMistakes: string[];
+  };
+  mediaUrls?: {
+    video?: string;
+    image?: string;
+  };
+  instructions: string[];
+  metadata?: {
+    caloriesPerMinute?: number;
+    restPeriodSeconds?: number;
+    recommendedTempo?: string;
+  };
+}
+
+export interface FetchExercisesResponse {
+  success: boolean;
+  message?: string;
+  exercises?: Exercise[];
+}
+
+export const fetchAllExercises = async (token: string): Promise<FetchExercisesResponse> => {
   try {
     const response = await fetch(`${API_BASE_URL}/exercises`, {
       method: 'GET',
       headers: {
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`, // Assuming this route needs auth
       },
     });
 
-    const data: FetchAllExercisesResponse = await response.json();
+    const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.message || 'Failed to fetch exercises');
+      return {
+        success: false,
+        message: data.message || 'Failed to fetch exercises',
+      };
     }
-    return data;
+
+    return {
+      success: true,
+      exercises: data.exercises,
+    };
   } catch (error) {
-    console.error('Fetch all individual exercises API error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
-    return { success: false, message: errorMessage };
+    console.error('Error fetching exercises:', error);
+    return {
+      success: false,
+      message: 'An error occurred while fetching exercises',
+    };
   }
 };
+
+// Add more exercise-related API calls here as needed

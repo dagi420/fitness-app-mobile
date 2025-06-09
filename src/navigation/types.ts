@@ -1,5 +1,6 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
-import { Workout, ExerciseDetail } from '../api/workoutService';
+import { Workout } from '../api/workoutService';
+import { Exercise } from '../api/exerciseService';
 import { BaseExercise } from '../screens/Planner/ManualPlanCreatorScreen';
 import { DisplayableWorkoutPlan } from '../screens/Workouts/WorkoutListScreen';
 import { FoodItem } from '../api/dietService';
@@ -13,17 +14,15 @@ export interface AIPlanConfigData {
   otherNotes: string;
 }
 
-export interface AIWorkoutConfigData {
+export type AIWorkoutConfigData = {
   fitnessGoal: string;
   fitnessLevel: string;
-  gender: string;
   workoutTypePreferences: string;
   availableEquipment: string[];
   timePerSession: number;
   workoutsPerWeek: number;
-  targetMuscleGroups?: string;
-  otherNotes?: string;
-}
+  gender: 'male' | 'female' | 'other' | 'not_specified';
+};
 
 export type WorkoutsStackParamList = {
   WorkoutsHome: undefined;
@@ -31,7 +30,7 @@ export type WorkoutsStackParamList = {
   WorkoutDetail: { workout: DisplayableWorkoutPlan };
   ActiveWorkout: { plan: UserWorkoutPlan };
   ExerciseLibrary: undefined;
-  ExerciseDetail: { exercise: ExerciseDetail };
+  ExerciseDetail: { exercise: Exercise };
 };
 
 export type RootStackParamList = {
@@ -45,13 +44,19 @@ export type RootStackParamList = {
   Onboarding: undefined;
   CreatePlan: undefined;
   Profile: undefined;
-  ManualPlanCreator: { preSelectedExercises?: BaseExercise[] };
-  ExercisePicker: { fromScreen: string };
+  ManualPlanCreator: {
+    preSelectedExercises?: BaseExercise[];
+  };
+  ExercisePicker: {
+    fromScreen: 'ManualPlanCreator';
+  };
   ActiveWorkout: { plan: DisplayableWorkoutPlan };
   ManualDietPlanner: undefined;
   FoodItemPicker: { mealId: string; onFoodItemSelected: (foodItem: FoodItem) => void };
   AIConfigurationScreen: { onSubmit: (config: AIPlanConfigData) => void };
-  AIWorkoutConfigurationScreen: { onSubmit: (config: AIWorkoutConfigData) => void };
+  AIWorkoutConfigurationScreen: {
+    onSubmit: (config: AIWorkoutConfigData) => Promise<void>;
+  };
   Auth: NavigatorScreenParams<AuthStackParamList>;
   MainTabParamList: NavigatorScreenParams<MainTabParamList>;
   AIOnboarding: undefined;

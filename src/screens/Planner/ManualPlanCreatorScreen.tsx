@@ -1,20 +1,24 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
-  Button,
   StyleSheet,
   ScrollView,
   SafeAreaView,
   FlatList,
   Alert,
+  TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuth } from '../../store/AuthContext';
 import { saveUserWorkoutPlan } from '../../api/planService';
+import { useAppTheme } from '../../styles/useAppTheme';
+import { AppText } from '../../components/AppText';
+import { NeumorphicButton } from '../../components/NeumorphicButton';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 // Define Prop types for this screen
 type ManualPlanCreatorNavigationProp = StackNavigationProp<RootStackParamList, 'ManualPlanCreator'>;
@@ -49,27 +53,24 @@ const ManualPlanCreatorScreen = () => {
   const navigation = useNavigation<ManualPlanCreatorNavigationProp>();
   const route = useRoute<ManualPlanCreatorRouteProp>();
   const { user, token } = useAuth();
+  const theme = useAppTheme();
 
   const [planName, setPlanName] = useState('');
   const [exercisesInPlan, setExercisesInPlan] = useState<PlannedExercise[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Effect to handle pre-selected exercises if navigated with them (e.g., from an exercise picker)
+  // Effect to handle pre-selected exercises if navigated with them
   React.useEffect(() => {
     if (route.params?.preSelectedExercises) {
-      // Assuming preSelectedExercises are of type BaseExercise or compatible
       const newPlannedExercises: PlannedExercise[] = route.params.preSelectedExercises.map(ex => ({
-         ...ex, // Spread all properties from the selected exercise
-         // sets, reps, etc., will be undefined initially or can be defaulted
-        }));
+         ...ex,
+      }));
       setExercisesInPlan(prev => [...prev, ...newPlannedExercises]);
       navigation.setParams({ preSelectedExercises: undefined });
     }
   }, [route.params?.preSelectedExercises, navigation]);
 
   const handleAddExercise = () => {
-    // Navigate to an Exercise Picker screen
-    // Pass the current screen name so ExercisePicker knows where to return results
     navigation.navigate('ExercisePicker', { fromScreen: 'ManualPlanCreator' }); 
   };
 
@@ -96,8 +97,8 @@ const ManualPlanCreatorScreen = () => {
       });
       
       if (response.success && response.plan) {
-        Alert.alert('Plan Saved!', `Successfully saved ${response.plan.planName}.`);
-        navigation.goBack(); // Or navigate to a screen showing the plan
+        Alert.alert('Success!', `Successfully saved ${response.plan.planName}.`);
+        navigation.goBack();
       } else {
         Alert.alert('Save Failed', response.message || 'Could not save the plan.');
       }
@@ -110,65 +111,193 @@ const ManualPlanCreatorScreen = () => {
   };
   
   const renderExerciseItem = ({ item, index }: { item: PlannedExercise, index: number }) => (
-    <View style={styles.exerciseItemContainer}>
-      <Text style={styles.exerciseName}>{item.name}</Text>
-      <Text>Type: {item.type} | Difficulty: {item.difficulty}</Text>
-      <TextInput 
-        placeholder="Sets (e.g., 3)"
-        value={item.sets}
-        onChangeText={text => {
-          const newExercises = [...exercisesInPlan];
-          newExercises[index].sets = text;
-          setExercisesInPlan(newExercises);
-        }}
-        style={styles.exerciseInput}
-      />
-      <TextInput 
-        placeholder="Reps (e.g., 8-12)"
-        value={item.reps}
-        onChangeText={text => {
-          const newExercises = [...exercisesInPlan];
-          newExercises[index].reps = text;
-          setExercisesInPlan(newExercises);
-        }}
-        style={styles.exerciseInput}
-      />
-       <Button title="Remove" onPress={() => {
-            setExercisesInPlan(prev => prev.filter((_, i) => i !== index));
-       }} color="#ff3b30"/>
+    <View style={[styles.exerciseItemContainer, { backgroundColor: theme.currentColors.surface }]}>
+      <View style={styles.exerciseHeader}>
+        <View style={styles.exerciseHeaderLeft}>
+          <AppText variant="h3" style={{ color: theme.currentColors.textPrimary }}>
+            {item.name}
+          </AppText>
+          <AppText variant="caption" style={{ color: theme.currentColors.textSecondary }}>
+            {item.type} • {item.difficulty}
+          </AppText>
+        </View>
+        <TouchableOpacity 
+          onPress={() => setExercisesInPlan(prev => prev.filter((_, i) => i !== index))}
+          style={styles.removeButton}
+        >
+          <Ionicons name="close-circle-outline" size={24} color={theme.currentColors.error} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.exerciseInputsContainer}>
+        <View style={styles.inputRow}>
+          <View style={styles.inputWrapper}>
+            <AppText variant="caption" style={{ color: theme.currentColors.textSecondary }}>
+              Sets
+            </AppText>
+            <TextInput 
+              placeholder="e.g., 3"
+              value={item.sets}
+              onChangeText={text => {
+                const newExercises = [...exercisesInPlan];
+                newExercises[index].sets = text;
+                setExercisesInPlan(newExercises);
+              }}
+              style={[
+                styles.exerciseInput,
+                { 
+                  backgroundColor: theme.currentColors.background,
+                  color: theme.currentColors.textPrimary,
+                }
+              ]}
+              placeholderTextColor={theme.currentColors.textSecondary}
+              keyboardType="numeric"
+            />
+          </View>
+          <View style={styles.inputWrapper}>
+            <AppText variant="caption" style={{ color: theme.currentColors.textSecondary }}>
+              Reps
+            </AppText>
+            <TextInput 
+              placeholder="e.g., 8-12"
+              value={item.reps}
+              onChangeText={text => {
+                const newExercises = [...exercisesInPlan];
+                newExercises[index].reps = text;
+                setExercisesInPlan(newExercises);
+              }}
+              style={[
+                styles.exerciseInput,
+                { 
+                  backgroundColor: theme.currentColors.background,
+                  color: theme.currentColors.textPrimary,
+                }
+              ]}
+              placeholderTextColor={theme.currentColors.textSecondary}
+            />
+          </View>
+        </View>
+      </View>
+
+      {item.targetMuscleGroups && item.targetMuscleGroups.length > 0 && (
+        <View style={styles.tagsContainer}>
+          {item.targetMuscleGroups.map((muscle, i) => (
+            <View 
+              key={i} 
+              style={[
+                styles.tag,
+                { backgroundColor: theme.currentColors.primary + '20' }
+              ]}
+            >
+              <AppText 
+                variant="caption" 
+                style={{ color: theme.currentColors.primary }}
+              >
+                {muscle}
+              </AppText>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container}>
-        <Text style={styles.title}>Create New Workout Plan</Text>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.currentColors.background }]}>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        <AppText variant="h1" style={[styles.title, { color: theme.currentColors.textPrimary }]}>
+          Create Workout Plan
+        </AppText>
         
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            { 
+              backgroundColor: theme.currentColors.surface,
+              color: theme.currentColors.textPrimary,
+            }
+          ]}
           placeholder="Enter Plan Name (e.g., My Strength Routine)"
+          placeholderTextColor={theme.currentColors.textSecondary}
           value={planName}
           onChangeText={setPlanName}
         />
 
-        <View style={styles.buttonGroup}>
-          <Button title="Add Exercise to Plan" onPress={handleAddExercise} />
+        <View style={styles.addExerciseContainer}>
+          <NeumorphicButton
+            neumorphicType="raised"
+            buttonType="primary"
+            onPress={handleAddExercise}
+            containerStyle={styles.addButton}
+          >
+            <Ionicons 
+              name="add-circle-outline" 
+              size={24} 
+              color="white"
+              style={{ marginRight: 8 }}
+            />
+            <AppText variant="button" style={{ color: "white" }}>
+              Add Exercise
+            </AppText>
+          </NeumorphicButton>
         </View>
 
-        <Text style={styles.listHeader}>Exercises in this Plan:</Text>
-        {exercisesInPlan.length === 0 ? (
-          <Text style={styles.emptyListText}>No exercises added yet.</Text>
+        {exercisesInPlan.length > 0 ? (
+          <View style={styles.exercisesContainer}>
+            <AppText variant="h2" style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
+              Exercises ({exercisesInPlan.length})
+            </AppText>
+            <FlatList
+              data={exercisesInPlan}
+              renderItem={renderExerciseItem}
+              keyExtractor={(item, index) => `${item._id}-${index}`}
+              scrollEnabled={false}
+              ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
+            />
+          </View>
         ) : (
-          <FlatList
-            data={exercisesInPlan}
-            renderItem={renderExerciseItem}
-            keyExtractor={(item, index) => `${item._id}-${index}`}
-            scrollEnabled={false} // If ScrollView is the parent, disable FlatList scroll
-          />
+          <View style={styles.emptyStateContainer}>
+            <Ionicons 
+              name="barbell-outline" 
+              size={48} 
+              color={theme.currentColors.textSecondary} 
+            />
+            <AppText 
+              variant="body1" 
+              style={[styles.emptyStateText, { color: theme.currentColors.textSecondary }]}
+            >
+              No exercises added yet.{'\n'}Tap the button above to add exercises.
+            </AppText>
+          </View>
         )}
         
-        <View style={styles.saveButtonContainer}>
-          <Button title={isLoading ? "Saving..." : "Save Plan"} onPress={handleSavePlan} disabled={isLoading} color="#007AFF" />
+        <View style={styles.bottomButtonsContainer}>
+          <NeumorphicButton
+            neumorphicType="pressedIn"
+            buttonType="secondary"
+            onPress={() => navigation.goBack()}
+            containerStyle={[styles.bottomButton, { marginRight: 8 }]}
+          >
+            <AppText variant="button" style={{ color: theme.currentColors.textSecondary }}>
+              Cancel
+            </AppText>
+          </NeumorphicButton>
+
+          <NeumorphicButton
+            neumorphicType="raised"
+            buttonType="primary"
+            onPress={handleSavePlan}
+            disabled={isLoading}
+            containerStyle={[styles.bottomButton, { marginLeft: 8 }]}
+          >
+            {isLoading ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <AppText variant="button" style={{ color: "white" }}>
+                Save Plan
+              </AppText>
+            )}
+          </NeumorphicButton>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -178,69 +307,97 @@ const ManualPlanCreatorScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f0f2f5',
   },
   container: {
     flex: 1,
-    padding: 20,
+    padding: 16,
   },
   title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
+    marginBottom: 24,
   },
   input: {
-    backgroundColor: 'white',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
     fontSize: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    marginBottom: 24,
   },
-  buttonGroup: {
-    marginBottom: 20,
+  addExerciseContainer: {
+    marginBottom: 24,
   },
-  listHeader: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 10,
-    marginBottom: 10,
+  addButton: {
+    paddingVertical: 12,
   },
-  emptyListText: {
-    textAlign: 'center',
-    color: '#777',
-    marginTop: 10,
-    marginBottom: 20,
+  exercisesContainer: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    marginBottom: 16,
   },
   exerciseItemContainer: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#eee',
+    borderRadius: 16,
+    padding: 16,
   },
-  exerciseName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 5,
+  exerciseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  exerciseHeaderLeft: {
+    flex: 1,
+    marginRight: 16,
+  },
+  removeButton: {
+    padding: 4,
+  },
+  exerciseInputsContainer: {
+    marginBottom: 16,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    marginHorizontal: -8,
+  },
+  inputWrapper: {
+    flex: 1,
+    marginHorizontal: 8,
   },
   exerciseInput: {
-    backgroundColor: '#f9f9f9',
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 5,
+    borderRadius: 8,
     fontSize: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    marginTop: 4,
   },
-  saveButtonContainer: {
-    marginTop: 30,
-    marginBottom: 20, // Ensure it's visible if content is long
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    marginHorizontal: -4,
+  },
+  tag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    margin: 4,
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  emptyStateText: {
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  bottomButtonsContainer: {
+    flexDirection: 'row',
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  bottomButton: {
+    flex: 1,
+    paddingVertical: 12,
   },
 });
 

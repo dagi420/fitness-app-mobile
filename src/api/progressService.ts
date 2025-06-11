@@ -38,7 +38,7 @@ export interface PhotoUpload {
   type: string; // e.g., 'image/jpeg'
 }
 
-interface ApiResponse<T> {
+export interface ApiResponse<T> {
   success: boolean;
   message?: string;
   log?: T;
@@ -47,7 +47,7 @@ interface ApiResponse<T> {
 }
 
 const getHeaders = (token: string, isFormData: boolean = false) => {
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Authorization': `Bearer ${token}`,
   };
   if (!isFormData) {

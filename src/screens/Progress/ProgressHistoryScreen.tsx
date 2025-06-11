@@ -26,6 +26,7 @@ type ProgressHistoryNavigationProp = StackNavigationProp<RootStackParamList, 'Pr
 const ProgressHistoryScreen = () => {
   const navigation = useNavigation<ProgressHistoryNavigationProp>();
   const { user, token } = useAuth();
+  const serverRoot = API_BASE_URL.replace('/api', '');
 
   const [allLogs, setAllLogs] = useState<ProgressLog[]>([]);
   const [filteredLogs, setFilteredLogs] = useState<ProgressLog[]>([]);
@@ -163,9 +164,9 @@ const ProgressHistoryScreen = () => {
             {item.photoUrls && item.photoUrls.length > 0 && (
                 <TouchableOpacity onPress={() => navigateToPhotoViewer(item.photoUrls || [], item.date)}>
                     <Image 
-                        source={{ uri: `${API_BASE_URL}${item.photoUrls[0]}` }} 
+                        source={{ uri: `${serverRoot}${item.photoUrls[0]}` }} 
                         style={styles.thumbnail} 
-                        onError={(e) => console.log("Error loading image:", e.nativeEvent.error, `${API_BASE_URL}${item.photoUrls && item.photoUrls[0]}`)}
+                        onError={(e) => console.log("Error loading image:", e.nativeEvent.error, `${serverRoot}${item.photoUrls && item.photoUrls[0]}`)}
                     />
                 </TouchableOpacity>
             )}

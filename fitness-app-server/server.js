@@ -54,12 +54,13 @@ const storage = multer.diskStorage({
 const upload = multer({ 
   storage: storage,
   fileFilter: (req, file, cb) => {
-    // Accept images only
-    if (!file.originalname.match(/\\.(jpg|jpeg|png|gif)$/i)) {
-        req.fileValidationError = 'Only image files (jpg, jpeg, png, gif) are allowed!';
-        return cb(null, false); // Reject file
+    // Accept images based on mimetype
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      req.fileValidationError = 'Only image files are allowed!';
+      cb(null, false);
     }
-    cb(null, true); // Accept file
   },
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB file size limit
 });
@@ -1357,9 +1358,9 @@ app.post('/api/progress/:logId/photos', verifyToken, upload.array('progressPhoto
       return res.status(404).json({ success: false, message: 'Progress log not found or permission denied.' });
     }
 
-    // Construct URLs for the uploaded photos (relative to what client will request)
-    // Server serves /public, so URLs should be /uploads/progress_photos/filename.jpg from client perspective
-    const photoUrls = files.map(file => `/uploads/progress_photos/${file.filename}`);
+    // Construct URLs for the uploaded photos.
+    // Server serves the 'public' folder, so URLs should start with /public
+    const photoUrls = files.map(file => `/public/uploads/progress_photos/${file.filename}`);
 
     // Update the log entry with the new photo URLs
     const result = await progressLogsCollection.updateOne(

@@ -61,9 +61,15 @@ export type RootStackParamList = {
   MainTabParamList: NavigatorScreenParams<MainTabParamList>;
   AIOnboarding: undefined;
   AIGeneration: { planType: 'workout' | 'diet' };
-  ProgressLogEntry: ProgressLogEntryScreenParams | undefined;
+  Progress: undefined;
   ProgressHistory: undefined;
-  PhotoViewer: { photoUrls: string[]; logDate?: string; };
+  ProgressLogEntry: {
+    existingLogData?: ProgressLog;
+  };
+  PhotoViewer: {
+    photoUrls: string[];
+    logDate?: string;
+  };
 };
 
 export type MainTabParamList = {

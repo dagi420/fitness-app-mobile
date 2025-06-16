@@ -1,24 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   TextInput,
   StyleSheet,
   ScrollView,
   SafeAreaView,
-  FlatList,
   Alert,
   TouchableOpacity,
   ActivityIndicator,
+  Text,
+  Image,
+  StatusBar
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuth } from '../../store/AuthContext';
 import { saveUserWorkoutPlan } from '../../api/planService';
-import { useAppTheme } from '../../styles/useAppTheme';
-import { AppText } from '../../components/AppText';
-import { NeumorphicButton } from '../../components/NeumorphicButton';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Ionicons } from '@expo/vector-icons';
+import DraggableFlatList, {
+  RenderItemParams,
+} from 'react-native-draggable-flatlist';
 
 // Define Prop types for this screen
 type ManualPlanCreatorNavigationProp = StackNavigationProp<RootStackParamList, 'ManualPlanCreator'>;
@@ -53,25 +55,37 @@ const ManualPlanCreatorScreen = () => {
   const navigation = useNavigation<ManualPlanCreatorNavigationProp>();
   const route = useRoute<ManualPlanCreatorRouteProp>();
   const { user, token } = useAuth();
-  const theme = useAppTheme();
 
   const [planName, setPlanName] = useState('');
   const [exercisesInPlan, setExercisesInPlan] = useState<PlannedExercise[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Effect to handle pre-selected exercises if navigated with them
-  React.useEffect(() => {
-    if (route.params?.preSelectedExercises) {
-      const newPlannedExercises: PlannedExercise[] = route.params.preSelectedExercises.map(ex => ({
-         ...ex,
-      }));
-      setExercisesInPlan(prev => [...prev, ...newPlannedExercises]);
-      navigation.setParams({ preSelectedExercises: undefined });
-    }
-  }, [route.params?.preSelectedExercises, navigation]);
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.preSelectedExercises) {
+        const newPlannedExercises: PlannedExercise[] = route.params.preSelectedExercises.map(ex => ({
+          ...ex,
+          sets: '3',
+          reps: '10',
+        }));
+        setExercisesInPlan(prev => [...prev, ...newPlannedExercises]);
+        navigation.setParams({ preSelectedExercises: undefined });
+      }
+    }, [route.params?.preSelectedExercises])
+  );
 
   const handleAddExercise = () => {
-    navigation.navigate('ExercisePicker', { fromScreen: 'ManualPlanCreator' }); 
+    navigation.navigate('ExercisePicker', { fromScreen: 'ManualPlanCreator' });
+  };
+  
+  const handleRemoveExercise = (index: number) => {
+    setExercisesInPlan(prev => prev.filter((_, i) => i !== index));
+  };
+  
+  const handleUpdateExercise = (index: number, field: 'sets' | 'reps', value: string) => {
+    const newExercises = [...exercisesInPlan];
+    newExercises[index][field] = value;
+    setExercisesInPlan(newExercises);
   };
 
   const handleSavePlan = async () => {
@@ -90,12 +104,12 @@ const ManualPlanCreatorScreen = () => {
 
     setIsLoading(true);
     try {
-      const response = await saveUserWorkoutPlan(token, { 
-        userId: user._id, 
-        planName: planName.trim(), 
-        exercises: exercisesInPlan 
+      const response = await saveUserWorkoutPlan(token, {
+        userId: user._id,
+        planName: planName.trim(),
+        exercises: exercisesInPlan,
       });
-      
+
       if (response.success && response.plan) {
         Alert.alert('Success!', `Successfully saved ${response.plan.planName}.`);
         navigation.goBack();
@@ -103,302 +117,269 @@ const ManualPlanCreatorScreen = () => {
         Alert.alert('Save Failed', response.message || 'Could not save the plan.');
       }
     } catch (error) {
-      console.error('handleSavePlan error:', error); 
+      console.error('handleSavePlan error:', error);
       Alert.alert('Error', 'An unexpected error occurred while saving.');
     } finally {
       setIsLoading(false);
     }
   };
-  
-  const renderExerciseItem = ({ item, index }: { item: PlannedExercise, index: number }) => (
-    <View style={[styles.exerciseItemContainer, { backgroundColor: theme.currentColors.surface }]}>
-      <View style={styles.exerciseHeader}>
-        <View style={styles.exerciseHeaderLeft}>
-          <AppText variant="h3" style={{ color: theme.currentColors.textPrimary }}>
-            {item.name}
-          </AppText>
-          <AppText variant="caption" style={{ color: theme.currentColors.textSecondary }}>
-            {item.type} • {item.difficulty}
-          </AppText>
-        </View>
-        <TouchableOpacity 
-          onPress={() => setExercisesInPlan(prev => prev.filter((_, i) => i !== index))}
-          style={styles.removeButton}
+
+  const renderItem = useCallback(
+    ({ item, drag, isActive, getIndex }: RenderItemParams<PlannedExercise>) => {
+      const index = getIndex();
+      return (
+        <TouchableOpacity
+          style={[styles.exerciseCard, { backgroundColor: isActive ? '#2A2D32' : '#1E2328' }]}
+          onLongPress={drag}
+          disabled={isActive}
         >
-          <Ionicons name="close-circle-outline" size={24} color={theme.currentColors.error} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.exerciseInputsContainer}>
-        <View style={styles.inputRow}>
-          <View style={styles.inputWrapper}>
-            <AppText variant="caption" style={{ color: theme.currentColors.textSecondary }}>
-              Sets
-            </AppText>
-            <TextInput 
-              placeholder="e.g., 3"
-              value={item.sets}
-              onChangeText={text => {
-                const newExercises = [...exercisesInPlan];
-                newExercises[index].sets = text;
-                setExercisesInPlan(newExercises);
-              }}
-              style={[
-                styles.exerciseInput,
-                { 
-                  backgroundColor: theme.currentColors.background,
-                  color: theme.currentColors.textPrimary,
-                }
-              ]}
-              placeholderTextColor={theme.currentColors.textSecondary}
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={styles.inputWrapper}>
-            <AppText variant="caption" style={{ color: theme.currentColors.textSecondary }}>
-              Reps
-            </AppText>
-            <TextInput 
-              placeholder="e.g., 8-12"
-              value={item.reps}
-              onChangeText={text => {
-                const newExercises = [...exercisesInPlan];
-                newExercises[index].reps = text;
-                setExercisesInPlan(newExercises);
-              }}
-              style={[
-                styles.exerciseInput,
-                { 
-                  backgroundColor: theme.currentColors.background,
-                  color: theme.currentColors.textPrimary,
-                }
-              ]}
-              placeholderTextColor={theme.currentColors.textSecondary}
-            />
-          </View>
-        </View>
-      </View>
-
-      {item.targetMuscleGroups && item.targetMuscleGroups.length > 0 && (
-        <View style={styles.tagsContainer}>
-          {item.targetMuscleGroups.map((muscle, i) => (
-            <View 
-              key={i} 
-              style={[
-                styles.tag,
-                { backgroundColor: theme.currentColors.primary + '20' }
-              ]}
-            >
-              <AppText 
-                variant="caption" 
-                style={{ color: theme.currentColors.primary }}
-              >
-                {muscle}
-              </AppText>
+            <View style={styles.cardHeader}>
+                <Image source={{ uri: item.imageUrl || 'https://via.placeholder.com/100' }} style={styles.exerciseImage} />
+                <View style={styles.cardHeaderText}>
+                    <Text style={styles.exerciseName} numberOfLines={2}>{item.name}</Text>
+                     <Text style={styles.exerciseCategory}>{item.category}</Text>
+                </View>
+                <TouchableOpacity onPress={() => handleRemoveExercise(index)} style={styles.removeButton}>
+                    <Ionicons name="close-circle" size={24} color="#696E79" />
+                </TouchableOpacity>
             </View>
-          ))}
-        </View>
-      )}
-    </View>
+            <View style={styles.cardBody}>
+                <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Sets</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="3"
+                        placeholderTextColor="#696E79"
+                        value={item.sets}
+                        onChangeText={text => handleUpdateExercise(index, 'sets', text)}
+                        keyboardType="number-pad"
+                    />
+                </View>
+                <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Reps</Text>
+                     <TextInput
+                        style={styles.input}
+                        placeholder="10"
+                        placeholderTextColor="#696E79"
+                        value={item.reps}
+                        onChangeText={text => handleUpdateExercise(index, 'reps', text)}
+                        keyboardType="default"
+                    />
+                </View>
+            </View>
+        </TouchableOpacity>
+      );
+    },
+    [exercisesInPlan]
   );
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.currentColors.background }]}>
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        <AppText variant="h1" style={[styles.title, { color: theme.currentColors.textPrimary }]}>
-          Create Workout Plan
-        </AppText>
-        
-        <TextInput
-          style={[
-            styles.input,
-            { 
-              backgroundColor: theme.currentColors.surface,
-              color: theme.currentColors.textPrimary,
-            }
-          ]}
-          placeholder="Enter Plan Name (e.g., My Strength Routine)"
-          placeholderTextColor={theme.currentColors.textSecondary}
-          value={planName}
-          onChangeText={setPlanName}
-        />
-
-        <View style={styles.addExerciseContainer}>
-          <NeumorphicButton
-            neumorphicType="raised"
-            buttonType="primary"
-            onPress={handleAddExercise}
-            containerStyle={styles.addButton}
-          >
-            <Ionicons 
-              name="add-circle-outline" 
-              size={24} 
-              color="white"
-              style={{ marginRight: 8 }}
-            />
-            <AppText variant="button" style={{ color: "white" }}>
-              Add Exercise
-            </AppText>
-          </NeumorphicButton>
-        </View>
-
-        {exercisesInPlan.length > 0 ? (
-          <View style={styles.exercisesContainer}>
-            <AppText variant="h2" style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
-              Exercises ({exercisesInPlan.length})
-            </AppText>
-            <FlatList
-              data={exercisesInPlan}
-              renderItem={renderExerciseItem}
-              keyExtractor={(item, index) => `${item._id}-${index}`}
-              scrollEnabled={false}
-              ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
-            />
-          </View>
-        ) : (
-          <View style={styles.emptyStateContainer}>
-            <Ionicons 
-              name="barbell-outline" 
-              size={48} 
-              color={theme.currentColors.textSecondary} 
-            />
-            <AppText 
-              variant="body1" 
-              style={[styles.emptyStateText, { color: theme.currentColors.textSecondary }]}
-            >
-              No exercises added yet.{'\n'}Tap the button above to add exercises.
-            </AppText>
-          </View>
-        )}
-        
-        <View style={styles.bottomButtonsContainer}>
-          <NeumorphicButton
-            neumorphicType="pressedIn"
-            buttonType="secondary"
-            onPress={() => navigation.goBack()}
-            containerStyle={[styles.bottomButton, { marginRight: 8 }]}
-          >
-            <AppText variant="button" style={{ color: theme.currentColors.textSecondary }}>
-              Cancel
-            </AppText>
-          </NeumorphicButton>
-
-          <NeumorphicButton
-            neumorphicType="raised"
-            buttonType="primary"
-            onPress={handleSavePlan}
-            disabled={isLoading}
-            containerStyle={[styles.bottomButton, { marginLeft: 8 }]}
-          >
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Create Manual Plan</Text>
+      </View>
+      
+      <DraggableFlatList
+        containerStyle={{ flex: 1 }}
+        data={exercisesInPlan}
+        renderItem={renderItem}
+        keyExtractor={(item) => item._id}
+        onDragEnd={({ data }) => setExercisesInPlan(data)}
+        ListHeaderComponent={
+          <>
+            <View style={styles.planNameContainer}>
+              <TextInput
+                style={styles.planNameInput}
+                placeholder="Workout Plan Name"
+                placeholderTextColor="#696E79"
+                value={planName}
+                onChangeText={setPlanName}
+              />
+            </View>
+            <Text style={styles.listHeader}>Exercises</Text>
+          </>
+        }
+        ListFooterComponent={
+            <TouchableOpacity style={styles.addExerciseButton} onPress={handleAddExercise}>
+                <Ionicons name="add" size={24} color="#01D38D" />
+                <Text style={styles.addExerciseButtonText}>Add Exercise</Text>
+            </TouchableOpacity>
+        }
+        ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+                <Ionicons name="barbell-outline" size={60} color="#2A2D32" />
+                <Text style={styles.emptyText}>Your plan is empty</Text>
+                <Text style={styles.emptySubText}>Tap 'Add Exercise' to begin building your workout.</Text>
+            </View>
+        }
+        contentContainerStyle={{ paddingBottom: 100 }}
+      />
+      
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.saveButton} onPress={handleSavePlan} disabled={isLoading}>
             {isLoading ? (
-              <ActivityIndicator size="small" color="white" />
+                <ActivityIndicator color="#191E29" />
             ) : (
-              <AppText variant="button" style={{ color: "white" }}>
-                Save Plan
-              </AppText>
+                <Text style={styles.saveButtonText}>Save Plan</Text>
             )}
-          </NeumorphicButton>
-        </View>
-      </ScrollView>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-  title: {
-    marginBottom: 24,
-  },
-  input: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    fontSize: 16,
-    marginBottom: 24,
-  },
-  addExerciseContainer: {
-    marginBottom: 24,
-  },
-  addButton: {
-    paddingVertical: 12,
-  },
-  exercisesContainer: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    marginBottom: 16,
-  },
-  exerciseItemContainer: {
-    borderRadius: 16,
-    padding: 16,
-  },
-  exerciseHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  exerciseHeaderLeft: {
-    flex: 1,
-    marginRight: 16,
-  },
-  removeButton: {
-    padding: 4,
-  },
-  exerciseInputsContainer: {
-    marginBottom: 16,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    marginHorizontal: -8,
-  },
-  inputWrapper: {
-    flex: 1,
-    marginHorizontal: 8,
-  },
-  exerciseInput: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    fontSize: 14,
-    marginTop: 4,
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 8,
-    marginHorizontal: -4,
-  },
-  tag: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    margin: 4,
-  },
-  emptyStateContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 48,
-  },
-  emptyStateText: {
-    textAlign: 'center',
-    marginTop: 16,
-  },
-  bottomButtonsContainer: {
-    flexDirection: 'row',
-    marginTop: 24,
-    marginBottom: 16,
-  },
-  bottomButton: {
-    flex: 1,
-    paddingVertical: 12,
-  },
+    container: {
+        flex: 1,
+        backgroundColor: '#191E29',
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 15,
+        paddingHorizontal: 20,
+    },
+    backButton: {
+        marginRight: 15,
+    },
+    headerTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
+    },
+    planNameContainer: {
+        paddingHorizontal: 20,
+        marginBottom: 20,
+    },
+    planNameInput: {
+        backgroundColor: '#1E2328',
+        color: '#FFFFFF',
+        padding: 18,
+        borderRadius: 15,
+        fontSize: 18,
+        fontWeight: '500'
+    },
+    listHeader: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#FFFFFF',
+        paddingHorizontal: 20,
+        marginBottom: 10,
+    },
+    exerciseCard: {
+        backgroundColor: '#1E2328',
+        borderRadius: 15,
+        padding: 15,
+        marginHorizontal: 20,
+        marginBottom: 15,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 15,
+    },
+    exerciseImage: {
+        width: 60,
+        height: 60,
+        borderRadius: 10,
+        marginRight: 15,
+    },
+    cardHeaderText: {
+        flex: 1,
+    },
+    exerciseName: {
+        color: '#FFFFFF',
+        fontSize: 17,
+        fontWeight: '600',
+    },
+    exerciseCategory: {
+        color: '#A0A5B1',
+        fontSize: 14,
+        marginTop: 4,
+    },
+    removeButton: {
+        padding: 5,
+    },
+    cardBody: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+    },
+    inputGroup: {
+        flex: 1,
+        marginHorizontal: 5,
+    },
+    inputLabel: {
+        color: '#A0A5B1',
+        fontSize: 14,
+        marginBottom: 5,
+    },
+    input: {
+        backgroundColor: '#2A2D32',
+        color: '#FFFFFF',
+        padding: 12,
+        borderRadius: 10,
+        fontSize: 16,
+        textAlign: 'center',
+    },
+    addExerciseButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#01D38D20',
+        padding: 15,
+        borderRadius: 15,
+        marginHorizontal: 20,
+        marginTop: 10,
+    },
+    addExerciseButtonText: {
+        color: '#01D38D',
+        fontSize: 16,
+        fontWeight: '600',
+        marginLeft: 10,
+    },
+    emptyContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+        marginTop: 50,
+    },
+    emptyText: {
+        color: '#FFFFFF',
+        fontSize: 20,
+        fontWeight: '600',
+        marginTop: 15,
+    },
+    emptySubText: {
+        color: '#A0A5B1',
+        fontSize: 16,
+        textAlign: 'center',
+        marginTop: 10,
+    },
+    footer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        padding: 20,
+        backgroundColor: '#191E29',
+        borderTopWidth: 1,
+        borderTopColor: '#2A2D32'
+    },
+    saveButton: {
+        backgroundColor: '#01D38D',
+        padding: 18,
+        borderRadius: 30,
+        alignItems: 'center',
+    },
+    saveButtonText: {
+        color: '#191E29',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
 });
 
 export default ManualPlanCreatorScreen; 

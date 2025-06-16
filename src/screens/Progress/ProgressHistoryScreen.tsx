@@ -3,25 +3,41 @@ import {
   View,
   Text,
   FlatList,
-  Button,
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
   Image,
+  StatusBar,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../../navigation/types'; // Adjust if needed
+import { RootStackParamList } from '../../navigation/types';
 import { useAuth } from '../../store/AuthContext';
 import { fetchUserProgressLogs, ProgressLog, deleteProgressLog } from '../../api/progressService';
 import { Calendar, DateData } from 'react-native-calendars';
-import { MarkedDates } from 'react-native-calendars/src/types';
-import { API_BASE_URL } from '../../api/apiConfig'; // Import API_BASE_URL
+import { API_BASE_URL } from '../../api/apiConfig';
+import { Ionicons } from '@expo/vector-icons';
 
-// Ensure 'ProgressHistory' is in RootStackParamList, taking no params for now
 type ProgressHistoryNavigationProp = StackNavigationProp<RootStackParamList, 'ProgressHistory'>;
+
+const calendarTheme = {
+  backgroundColor: '#191E29',
+  calendarBackground: '#191E29',
+  textSectionTitleColor: '#A0A5B1',
+  selectedDayBackgroundColor: '#01D38D',
+  selectedDayTextColor: '#191E29',
+  todayTextColor: '#01D38D',
+  dayTextColor: '#FFFFFF',
+  textDisabledColor: '#696E79',
+  dotColor: '#01D38D',
+  selectedDotColor: '#191E29',
+  arrowColor: '#01D38D',
+  monthTextColor: '#FFFFFF',
+  textMonthFontWeight: 'bold' as 'bold',
+  textDayHeaderFontWeight: '500' as '500',
+};
 
 const ProgressHistoryScreen = () => {
   const navigation = useNavigation<ProgressHistoryNavigationProp>();
@@ -30,41 +46,26 @@ const ProgressHistoryScreen = () => {
 
   const [allLogs, setAllLogs] = useState<ProgressLog[]>([]);
   const [filteredLogs, setFilteredLogs] = useState<ProgressLog[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  const navigateToPhotoViewer = (photos: string[], date?: string) => {
-    if (photos && photos.length > 0) {
-      navigation.navigate('PhotoViewer', { photoUrls: photos, logDate: date });
-    }
-  };
-
   const loadProgressLogs = useCallback(async () => {
-    if (!user || !token) {
-      setError('User not authenticated.');
-      setAllLogs([]);
-      setFilteredLogs([]);
-      return;
-    }
+    if (!user || !token) return;
     setIsLoading(true);
-    setError(null);
     try {
       const response = await fetchUserProgressLogs(token, user._id);
       if (response.success && response.logs) {
         const sortedLogs = response.logs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setAllLogs(sortedLogs);
-        setFilteredLogs(selectedDate ? sortedLogs.filter(log => log.date.startsWith(selectedDate)) : sortedLogs);
-      } else {
-        setError(response.message || 'Failed to fetch progress logs.');
-        setAllLogs([]);
-        setFilteredLogs([]);
+        // Apply filter if a date is selected, otherwise show all
+        if (selectedDate) {
+          setFilteredLogs(sortedLogs.filter(log => log.date.startsWith(selectedDate)));
+        } else {
+          setFilteredLogs(sortedLogs);
+        }
       }
     } catch (err) {
       console.error("Error loading progress logs:", err);
-      setError('An unexpected error occurred while fetching logs.');
-      setAllLogs([]);
-      setFilteredLogs([]);
     } finally {
       setIsLoading(false);
     }
@@ -76,262 +77,222 @@ const ProgressHistoryScreen = () => {
     }, [loadProgressLogs])
   );
 
-  const markedDates = useMemo<MarkedDates>(() => {
-    const marks: MarkedDates = {};
+  const markedDates = useMemo(() => {
+    const marks: { [key: string]: any } = {};
     allLogs.forEach(log => {
-      const dateString = log.date.substring(0, 10);
-      marks[dateString] = { marked: true, dotColor: '#007AFF' };
+      marks[log.date.substring(0, 10)] = { marked: true, dotColor: '#01D38D' };
     });
     if (selectedDate) {
-        marks[selectedDate] = { ...(marks[selectedDate] || {}), selected: true, selectedColor: '#007AFF' };
+      marks[selectedDate] = { ...marks[selectedDate], selected: true, selectedColor: '#01D38D', selectedTextColor: '#191E29' };
     }
     return marks;
   }, [allLogs, selectedDate]);
 
   const onDayPress = (day: DateData) => {
     const dateString = day.dateString;
-    if (selectedDate === dateString) {
-      setSelectedDate(null);
-      setFilteredLogs(allLogs); 
-    } else {
-      setSelectedDate(dateString);
-      setFilteredLogs(allLogs.filter(log => log.date.startsWith(dateString)));
-    }
+    setSelectedDate(prev => (prev === dateString ? null : dateString));
   };
-
-  const handleAddNewLog = () => {
-    navigation.navigate('ProgressLogEntry', { 
-        // onLogSaved: () => { // Removed
-        //     setSelectedDate(null); // This logic can be handled by useFocusEffect or if ProgressLogEntry modifies a shared state
-        //     loadProgressLogs();
-        // }
-    });
-  };
-
+  
   const handleEditLog = (logId: string) => {
     const logToEdit = allLogs.find(log => log._id === logId);
-    navigation.navigate('ProgressLogEntry', { 
-        existingLogData: logToEdit, // Pass the full log data for pre-filling the form
-        // onLogSaved: () => { // Removed
-        //     loadProgressLogs(); 
-        // }
-    });
+    navigation.navigate('ProgressLogEntry', { existingLogData: logToEdit });
   };
 
-  const handleDeleteLog = async (logId: string) => {
-    if (!token) {
-        Alert.alert("Error", "Authentication token not found.");
-        return;
-    }
-    Alert.alert(
-        "Confirm Delete",
-        "Are you sure you want to delete this log? This action cannot be undone.",
-        [
-            { text: "Cancel", style: "cancel" },
-            {
-                text: "Delete", 
-                style: "destructive", 
-                onPress: async () => {
-                    setIsLoading(true);
-                    try {
-                        const response = await deleteProgressLog(token, logId);
-                        if (response.success) {
-                            Alert.alert("Success", "Log deleted successfully.");
-                            loadProgressLogs(); 
-                        } else {
-                            Alert.alert("Error", response.message || "Failed to delete log.");
-                        }
-                    } catch (err) {
-                        console.error("Error deleting log:", err);
-                        Alert.alert("Error", "An unexpected error occurred.");
-                    } finally {
-                        setIsLoading(false);
-                    }
+  const handleDeleteLog = (logId: string) => {
+    if (!token) return;
+    Alert.alert("Confirm Delete", "Are you sure you want to delete this log?", [
+        { text: "Cancel", style: "cancel" },
+        {
+            text: "Delete", style: "destructive", 
+            onPress: async () => {
+                const response = await deleteProgressLog(token, logId);
+                if (response.success) {
+                    Alert.alert("Success", "Log deleted.");
+                    loadProgressLogs(); 
+                } else {
+                    Alert.alert("Error", response.message || "Failed to delete log.");
                 }
             }
-        ]
-    );
+        }
+    ]);
   };
-
+  
   const renderLogItem = ({ item }: { item: ProgressLog }) => (
     <View style={styles.logItemContainer}>
-        <TouchableOpacity onPress={() => handleEditLog(item._id)} style={styles.logContent}>
-            <Text style={styles.logDate}>{new Date(item.date).toLocaleDateString()}</Text>
-            <Text style={styles.logDetail}>Weight: {item.weightKg} kg</Text>
-            {item.bodyFatPercentage && (
-                <Text style={styles.logDetail}>Body Fat: {item.bodyFatPercentage}%</Text>
-            )}
-            {item.photoUrls && item.photoUrls.length > 0 && (
-                <TouchableOpacity onPress={() => navigateToPhotoViewer(item.photoUrls || [], item.date)}>
-                    <Image 
-                        source={{ uri: `${serverRoot}${item.photoUrls[0]}` }} 
-                        style={styles.thumbnail} 
-                        onError={(e) => console.log("Error loading image:", e.nativeEvent.error, `${serverRoot}${item.photoUrls && item.photoUrls[0]}`)}
-                    />
+        <View style={styles.logItemHeader}>
+            <Text style={styles.logDate}>{new Date(item.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</Text>
+            <View style={styles.logActions}>
+                <TouchableOpacity onPress={() => handleEditLog(item._id)} style={styles.actionButton}>
+                    <Ionicons name="pencil-outline" size={20} color="#A0A5B1" />
                 </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleDeleteLog(item._id)} style={styles.actionButton}>
+                    <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
+                </TouchableOpacity>
+            </View>
+        </View>
+        <View style={styles.logDetails}>
+            <Text style={styles.logDetailText}>Weight: <Text style={styles.logDetailValue}>{item.weightKg} kg</Text></Text>
+            {item.bodyFatPercentage && (
+                <Text style={styles.logDetailText}>Body Fat: <Text style={styles.logDetailValue}>{item.bodyFatPercentage}%</Text></Text>
             )}
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleDeleteLog(item._id)} style={styles.deleteButton}>
-            <Text style={styles.deleteButtonText}>Delete</Text>
-        </TouchableOpacity>
+        </View>
+        {item.photoUrls && item.photoUrls.length > 0 && (
+             <TouchableOpacity onPress={() => navigation.navigate('PhotoViewer', { photoUrls: item.photoUrls, logDate: item.date })}>
+                <Image 
+                    source={{ uri: `${serverRoot}${item.photoUrls[0]}` }} 
+                    style={styles.thumbnail} 
+                />
+            </TouchableOpacity>
+        )}
     </View>
   );
 
-  if (isLoading && allLogs.length === 0) {
-    return (
-      <SafeAreaView style={styles.centeredContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text>Loading progress...</Text>
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={styles.centeredContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <Button title="Retry" onPress={loadProgressLogs} />
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Progress History</Text>
+        <View style={{width: 24}}/>
+      </View>
+      
       <Calendar
         onDayPress={onDayPress}
         markedDates={markedDates}
-        markingType={'dot'}
-        theme={{
-            calendarBackground: styles.safeArea.backgroundColor,
-            arrowColor: '#007AFF',
-            todayTextColor: '#FF3B30',
-            selectedDayBackgroundColor: '#007AFF',
-            selectedDayTextColor: '#ffffff',
-            dotColor: '#007AFF',
-        }}
+        theme={calendarTheme}
         style={styles.calendar}
       />
-      {filteredLogs.length === 0 && !isLoading ? (
-          <View style={styles.centeredContainerEmptyList}>
-            <Text style={styles.emptyText}>{selectedDate ? `No logs for ${new Date(selectedDate + 'T00:00:00').toLocaleDateString()}.` : "No progress logs found."}</Text>
-            {!selectedDate && <Text style={styles.emptySubText}>Start by adding your first log!</Text>}
-            {selectedDate && <Button title="Show All Logs" onPress={() => {setSelectedDate(null); setFilteredLogs(allLogs);}} />}
-          </View>
-      ) : (
-        <FlatList
-          data={filteredLogs}
-          renderItem={renderLogItem}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.listContentContainer}
-          refreshing={isLoading}
-          onRefresh={loadProgressLogs}
-        />
-      )}
-      <View style={styles.addButtonContainer}>
-        <Button title="Add New Progress Log" onPress={handleAddNewLog} />
-      </View>
+
+      <FlatList
+        data={filteredLogs}
+        renderItem={renderLogItem}
+        keyExtractor={(item) => item._id}
+        contentContainerStyle={styles.listContentContainer}
+        refreshing={isLoading}
+        onRefresh={loadProgressLogs}
+        ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+                <Ionicons name="reader-outline" size={60} color="#2A2D32" />
+                <Text style={styles.emptyText}>{selectedDate ? `No logs for this day.` : "No history found."}</Text>
+                {selectedDate && <Text style={styles.emptySubText}>Select another date or clear the filter.</Text>}
+            </View>
+        }
+      />
+       <TouchableOpacity 
+        style={styles.fab}
+        onPress={() => navigation.navigate('ProgressLogEntry', {})}
+      >
+        <Ionicons name="add" size={32} color="#191E29" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: '#f0f0f5',
+    backgroundColor: '#191E29',
   },
-  centeredContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2D32'
   },
-  centeredContainerEmptyList: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+  backButton: {
+      marginRight: 15,
   },
-  listContentContainer: {
-    padding: 10,
-    flexGrow: 1,
+  headerTitle: {
+      flex: 1,
+      textAlign: 'center',
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: '#FFFFFF',
   },
   calendar: {
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    marginBottom: 10,
+    borderBottomColor: '#2A2D32',
+    paddingBottom: 10,
+  },
+  listContentContainer: {
+    padding: 20,
+    flexGrow: 1,
   },
   logItemContainer: {
-    backgroundColor: '#fff',
-    padding: 15,
-    marginVertical: 8,
-    marginHorizontal: 10,
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 3,
+    backgroundColor: '#1E2328',
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 15,
+  },
+  logItemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  logContent: {
-    flex: 1, 
+    marginBottom: 15,
   },
   logDate: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
+    color: '#FFFFFF',
   },
-  logDetail: {
-    fontSize: 15,
-    color: '#555',
-    marginBottom: 3,
+  logActions: {
+      flexDirection: 'row',
+      gap: 15,
   },
-  errorText: {
+  actionButton: {
+      padding: 5,
+  },
+  logDetails: {
+      marginBottom: 15,
+      gap: 8,
+  },
+  logDetailText: {
     fontSize: 16,
-    color: 'red',
-    textAlign: 'center',
-    marginBottom: 15,
+    color: '#A0A5B1',
   },
-  emptyText: {
-    fontSize: 18,
-    color: '#777',
-    textAlign: 'center',
-  },
-  emptySubText: {
-    fontSize: 15,
-    color: '#999',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  addButtonContainer: {
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    backgroundColor: '#f8f8f8',
-  },
-  deleteButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: '#FF3B30',
-    borderRadius: 5,
-    marginLeft: 10,
-  },
-  deleteButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
+  logDetailValue: {
+      color: '#FFFFFF',
+      fontWeight: '600'
   },
   thumbnail: {
-    width: 60,
-    height: 60,
-    borderRadius: 4,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#eee',
+    width: '100%',
+    height: 150,
+    borderRadius: 10,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    marginTop: 50,
+  },
+  emptyText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginTop: 15,
+  },
+  emptySubText: {
+    fontSize: 16,
+    color: '#A0A5B1',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 30,
+    right: 30,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#01D38D',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
   },
 });
 

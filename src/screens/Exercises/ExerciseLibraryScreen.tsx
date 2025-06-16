@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,10 @@ import {
   TouchableOpacity,
   SafeAreaView,
   ActivityIndicator,
-  ScrollView,
+  TextInput,
   Image,
-  Dimensions,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -17,49 +18,154 @@ import { WorkoutsStackParamList } from '../../navigation/types';
 import { Exercise, fetchAllExercises } from '../../api/exerciseService';
 import { useAuth } from '../../store/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../../styles/useAppTheme';
-
-const { width } = Dimensions.get('window');
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type ExerciseLibraryNavigationProp = StackNavigationProp<WorkoutsStackParamList, 'ExerciseLibrary'>;
 
-// Define muscle groups for the filter - updated to match our new database
 const MUSCLE_GROUPS = [
-  'All',
-  'Upper Body',
-  'Lower Body',
-  'Core',
-  'Cardio',
-  'Full Body',
-  'Flexibility',
-  'Plyometrics',
-  'Olympic'
-] as const;
+  'All', 'Back', 'Chest', 'Shoulders', 'Biceps', 'Triceps', 'Legs', 'Abs', 'Cardio'
+];
+const DIFFICULTIES = ['All', 'Beginner', 'Intermediate', 'Advanced'];
 
-const DIFFICULTIES = ['All', 'Beginner', 'Intermediate', 'Advanced'] as const;
+const FilterModal = ({
+  visible,
+  onClose,
+  applyFilters,
+  initialFilters,
+  equipmentList,
+}) => {
+  const [muscleGroup, setMuscleGroup] = useState(initialFilters.muscleGroup);
+  const [difficulty, setDifficulty] = useState(initialFilters.difficulty);
+  const [equipment, setEquipment] = useState(initialFilters.equipment);
+
+  useEffect(() => {
+    setMuscleGroup(initialFilters.muscleGroup);
+    setDifficulty(initialFilters.difficulty);
+    setEquipment(initialFilters.equipment);
+  }, [initialFilters]);
+
+  const handleApply = () => {
+    applyFilters({ muscleGroup, difficulty, equipment });
+    onClose();
+  };
+  
+  const handleReset = () => {
+    setMuscleGroup('All');
+    setDifficulty('All');
+    setEquipment('All');
+    applyFilters({ muscleGroup: 'All', difficulty: 'All', equipment: 'All' });
+    onClose();
+  };
+
+  const renderFilterSection = (title, items, selected, setSelected) => (
+    <View style={styles.filterSection}>
+      <Text style={styles.filterTitle}>{title}</Text>
+      <View style={styles.filterOptionsContainer}>
+        {items.map(item => (
+          <TouchableOpacity
+            key={item}
+            style={[styles.filterChip, selected === item && styles.filterChipActive]}
+            onPress={() => setSelected(item)}
+          >
+            <Text style={[styles.filterChipText, selected === item && styles.filterChipTextActive]}>
+              {item}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
+  return (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={visible}
+      onRequestClose={onClose}
+    >
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Filters</Text>
+                <TouchableOpacity onPress={onClose}>
+                    <Ionicons name="close" size={28} color="#FFFFFF" />
+                </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {renderFilterSection("Muscle Group", MUSCLE_GROUPS, muscleGroup, setMuscleGroup)}
+              {renderFilterSection("Difficulty", DIFFICULTIES, difficulty, setDifficulty)}
+              {renderFilterSection("Equipment", ['All', ...equipmentList], equipment, setEquipment)}
+            </ScrollView>
+             <View style={styles.modalFooter}>
+                <TouchableOpacity style={styles.resetButton} onPress={handleReset}>
+                    <Text style={styles.resetButtonText}>Reset</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
+                    <Text style={styles.applyButtonText}>Apply Filters</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+};
+
+const ExerciseCard = ({ item, onPress }: { item: Exercise; onPress: () => void }) => (
+  <TouchableOpacity style={styles.card} onPress={onPress}>
+    <Image source={{ uri: item.imageUrl || 'https://via.placeholder.com/150' }} style={styles.cardImage} />
+    <View style={styles.cardContent}>
+      <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
+      <Text style={styles.cardSubtitle}>{item.category || 'N/A'}</Text>
+    </View>
+    <Ionicons name="chevron-forward" size={24} color="#696E79" />
+  </TouchableOpacity>
+);
+
+const EmptyState = ({ onRefresh }) => (
+    <View style={styles.emptyContainer}>
+        <Ionicons name="sad-outline" size={80} color="#696E79" />
+        <Text style={styles.emptyTitle}>No Exercises Found</Text>
+        <Text style={styles.emptySubtitle}>
+            Try adjusting your search or filter.
+        </Text>
+        <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+            <Ionicons name="refresh" size={20} color="#01D38D" />
+            <Text style={styles.refreshButtonText}>Tap to Refresh</Text>
+        </TouchableOpacity>
+    </View>
+);
 
 const ExerciseLibraryScreen = () => {
   const navigation = useNavigation<ExerciseLibraryNavigationProp>();
+  const insets = useSafeAreaInsets();
   const { token } = useAuth();
-  const theme = useAppTheme();
 
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<typeof MUSCLE_GROUPS[number]>('All');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<typeof DIFFICULTIES[number]>('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
 
-  useEffect(() => {
-    loadExercises();
-  }, [token]);
+  const [filters, setFilters] = useState({
+    muscleGroup: 'All',
+    difficulty: 'All',
+    equipment: 'All',
+  });
+  
+  const equipmentList = useMemo(() => {
+      const allEquipment = new Set<string>();
+      exercises.forEach(ex => {
+          if(ex.equipmentNeeded) {
+            ex.equipmentNeeded.forEach(eq => allEquipment.add(eq));
+          }
+      });
+      return Array.from(allEquipment).sort();
+  }, [exercises]);
 
   const loadExercises = async () => {
-    if (!token) {
-      setError('Authentication required');
-      setIsLoading(false);
-      return;
-    }
-
+    if (!token) return;
+    setIsLoading(true);
+    setError(null);
     try {
       const response = await fetchAllExercises(token);
       if (response.success && response.exercises) {
@@ -74,171 +180,95 @@ const ExerciseLibraryScreen = () => {
     }
   };
 
+  useEffect(() => {
+    loadExercises();
+  }, [token]);
+
   const filteredExercises = useMemo(() => {
     return exercises.filter(exercise => {
-      const matchesMuscleGroup = selectedMuscleGroup === 'All' || 
-        exercise.category === selectedMuscleGroup ||
-        (exercise.targetMuscleGroups && exercise.targetMuscleGroups.some(group => group === selectedMuscleGroup));
-      const matchesDifficulty = selectedDifficulty === 'All' || 
-        exercise.difficulty === selectedDifficulty;
-      return matchesMuscleGroup && matchesDifficulty;
+      const matchesMuscleGroup = filters.muscleGroup === 'All' || exercise.category === filters.muscleGroup;
+      const matchesDifficulty = filters.difficulty === 'All' || exercise.difficulty === filters.difficulty;
+      const matchesEquipment = filters.equipment === 'All' || (exercise.equipmentNeeded && exercise.equipmentNeeded.includes(filters.equipment));
+      const matchesSearch = exercise.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesMuscleGroup && matchesDifficulty && matchesEquipment && matchesSearch;
     });
-  }, [exercises, selectedMuscleGroup, selectedDifficulty]);
-
-  const renderMuscleGroupFilter = () => (
-    <ScrollView 
-      horizontal 
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.filterContainer}
-    >
-      {MUSCLE_GROUPS.map((group) => (
-        <TouchableOpacity
-          key={group}
-          style={[
-            styles.filterButton,
-            selectedMuscleGroup === group && styles.filterButtonActive,
-            { backgroundColor: theme.currentColors.surface }
-          ]}
-          onPress={() => setSelectedMuscleGroup(group)}
-        >
-          <Text 
-            style={[
-              styles.filterButtonText,
-              selectedMuscleGroup === group && styles.filterButtonTextActive,
-              { color: selectedMuscleGroup === group ? theme.currentColors.primary : theme.currentColors.textSecondary }
-            ]}
-          >
-            {group}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
-  );
-
-  const renderDifficultyFilter = () => (
-    <ScrollView 
-      horizontal 
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.filterContainer}
-    >
-      {DIFFICULTIES.map((difficulty) => (
-        <TouchableOpacity
-          key={difficulty}
-          style={[
-            styles.filterButton,
-            selectedDifficulty === difficulty && styles.filterButtonActive,
-            { backgroundColor: theme.currentColors.surface }
-          ]}
-          onPress={() => setSelectedDifficulty(difficulty)}
-        >
-          <Text 
-            style={[
-              styles.filterButtonText,
-              selectedDifficulty === difficulty && styles.filterButtonTextActive,
-              { color: selectedDifficulty === difficulty ? theme.currentColors.primary : theme.currentColors.textSecondary }
-            ]}
-          >
-            {difficulty}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
-  );
-
-  const renderExerciseCard = ({ item }: { item: Exercise }) => (
-    <TouchableOpacity
-      style={[styles.exerciseCard, { backgroundColor: theme.currentColors.surface }]}
-      onPress={() => navigation.navigate('ExerciseDetail', { exercise: item })}
-    >
-      {item.mediaUrls?.image ? (
-        <Image source={{ uri: item.mediaUrls.image }} style={styles.exerciseImage} />
-      ) : (
-        <View style={[styles.placeholderImage, { backgroundColor: theme.currentColors.border }]}>
-          <Ionicons name="barbell-outline" size={40} color={theme.currentColors.textSecondary} />
-        </View>
-      )}
-      <View style={styles.exerciseInfo}>
-        <Text style={[styles.exerciseName, { color: theme.currentColors.textPrimary }]}>
-          {item.name}
-        </Text>
-        <Text style={[styles.exerciseDetail, { color: theme.currentColors.textSecondary }]}>
-          {item.targetMuscleGroups?.join(', ') || 'No muscle groups specified'}
-        </Text>
-        <View style={styles.exerciseMetadata}>
-          <Text style={[styles.exerciseMetadataText, { color: theme.currentColors.textSecondary }]}>
-            {item.difficulty || 'No difficulty specified'}
-          </Text>
-          {item.equipmentNeeded?.length > 0 && (
-            <Text style={[styles.exerciseMetadataText, { color: theme.currentColors.textSecondary }]}>
-              • {item.equipmentNeeded.join(', ')}
-            </Text>
-          )}
-        </View>
-      </View>
-      <Ionicons 
-        name="chevron-forward" 
-        size={24} 
-        color={theme.currentColors.textSecondary} 
-        style={styles.chevron}
-      />
-    </TouchableOpacity>
-  );
+  }, [exercises, filters, searchQuery]);
+  
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.muscleGroup !== 'All') count++;
+    if (filters.difficulty !== 'All') count++;
+    if (filters.equipment !== 'All') count++;
+    return count;
+  }, [filters]);
 
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={theme.currentColors.primary} />
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={[styles.container, styles.centered]}>
-        <Text style={[styles.errorText, { color: theme.currentColors.error }]}>{error}</Text>
-        <TouchableOpacity 
-          style={[styles.retryButton, { backgroundColor: theme.currentColors.primary }]}
-          onPress={loadExercises}
-        >
-          <Text style={[styles.retryButtonText, { color: theme.currentColors.surface }]}>
-            Retry
-          </Text>
-        </TouchableOpacity>
-      </SafeAreaView>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#01D38D" />
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.currentColors.background }]}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.currentColors.textPrimary }]}>
-          Exercise Library
-        </Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Exercise Library</Text>
       </View>
-      
-      <View style={styles.filtersSection}>
-        {renderMuscleGroupFilter()}
-        {renderDifficultyFilter()}
+
+      <View style={styles.searchAndFilterContainer}>
+        <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color="#A0A5B1" style={styles.searchIcon} />
+            <TextInput
+            style={styles.searchInput}
+            placeholder="Search exercises..."
+            placeholderTextColor="#A0A5B1"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            />
+        </View>
+        <TouchableOpacity style={styles.filterButton} onPress={() => setIsFilterModalVisible(true)}>
+          <Ionicons name="options-outline" size={24} color="#FFFFFF" />
+          {activeFilterCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
+
+      <FilterModal
+        visible={isFilterModalVisible}
+        onClose={() => setIsFilterModalVisible(false)}
+        applyFilters={setFilters}
+        initialFilters={filters}
+        equipmentList={equipmentList}
+      />
+
+      {error && (
+        <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity onPress={loadExercises}>
+                <Text style={styles.retryText}>Try Again</Text>
+            </TouchableOpacity>
+        </View>
+      )}
 
       <FlatList
         data={filteredExercises}
-        renderItem={renderExerciseCard}
+        renderItem={({ item }) => (
+          <ExerciseCard
+            item={item}
+            onPress={() => navigation.navigate('ExerciseDetail', { exercise: item })}
+          />
+        )}
         keyExtractor={(item) => item._id}
-        contentContainerStyle={styles.exerciseList}
+        contentContainerStyle={styles.listContentContainer}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons 
-              name="fitness-outline" 
-              size={48} 
-              color={theme.currentColors.textSecondary} 
-            />
-            <Text style={[styles.emptyStateText, { color: theme.currentColors.textSecondary }]}>
-              No exercises found for selected filters
-            </Text>
-          </View>
-        }
+        ListEmptyComponent={<EmptyState onRefresh={loadExercises} />}
       />
     </SafeAreaView>
   );
@@ -247,123 +277,242 @@ const ExerciseLibraryScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  centered: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#191E29',
   },
   header: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
   },
-  title: {
+  backButton: {
+    marginRight: 15,
+  },
+  headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
+    color: '#FFFFFF',
   },
-  filtersSection: {
-    paddingVertical: 8,
+  searchAndFilterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 10,
   },
-  filterContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E2328',
+    borderRadius: 15,
+    paddingHorizontal: 15,
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    height: 50,
+    color: '#FFFFFF',
+    fontSize: 16,
   },
   filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
+    marginLeft: 10,
+    height: 50,
+    width: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1E2328',
+    borderRadius: 15,
   },
-  filterButtonActive: {
-    borderColor: 'transparent',
-  },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  filterButtonTextActive: {
-    fontWeight: '600',
-  },
-  exerciseList: {
-    padding: 16,
-  },
-  exerciseCard: {
-    flexDirection: 'row',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  exerciseImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-  },
-  placeholderImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
+  filterBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#01D38D',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  exerciseInfo: {
-    flex: 1,
-    marginLeft: 12,
-    justifyContent: 'center',
-  },
-  exerciseName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  exerciseDetail: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  exerciseMetadata: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  exerciseMetadataText: {
+  filterBadgeText: {
+    color: '#191E29',
     fontSize: 12,
-    marginRight: 8,
+    fontWeight: 'bold',
   },
-  chevron: {
-    alignSelf: 'center',
-    marginLeft: 8,
+  filterContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
   },
-  emptyState: {
+  filterChip: {
+    backgroundColor: '#1E2328',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  filterChipActive: {
+    backgroundColor: '#01D38D',
+  },
+  filterChipText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: '#191E29',
+  },
+  listContentContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  card: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
+    backgroundColor: '#1E2328',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 15,
   },
-  emptyStateText: {
-    marginTop: 16,
-    fontSize: 16,
-    textAlign: 'center',
+  cardImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 10,
+    marginRight: 15,
+  },
+  cardContent: {
+    flex: 1,
+  },
+  cardTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  cardSubtitle: {
+    color: '#A0A5B1',
+    fontSize: 14,
+    marginTop: 4,
+  },
+  errorContainer: {
+    padding: 20,
+    alignItems: 'center',
   },
   errorText: {
+    color: '#FF6B6B',
     fontSize: 16,
-    marginBottom: 16,
     textAlign: 'center',
   },
-  retryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
+  retryText: {
+    color: '#01D38D',
     fontSize: 16,
     fontWeight: '600',
+    marginTop: 10,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    marginTop: 80,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginTop: 20,
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#A0A5B1',
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 30,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#01D38D20',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  refreshButtonText: {
+    color: '#01D38D',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 10,
+  },
+  modalContainer: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: 'rgba(0,0,0,0.7)'
+  },
+  modalContent: {
+      backgroundColor: '#1E2328',
+      height: '75%',
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2D32',
+  },
+  modalTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  filterSection: {
+    marginBottom: 25,
+  },
+  filterTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 15,
+  },
+  filterOptionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  modalFooter: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingTop: 20,
+      borderTopWidth: 1,
+      borderTopColor: '#2A2D32',
+  },
+  resetButton: {
+      backgroundColor: '#2A2D32',
+      paddingVertical: 15,
+      borderRadius: 15,
+      flex: 1,
+      marginRight: 10,
+      alignItems: 'center',
+  },
+  resetButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: 'bold',
+  },
+  applyButton: {
+      backgroundColor: '#01D38D',
+      paddingVertical: 15,
+      borderRadius: 15,
+      flex: 2,
+      alignItems: 'center',
+  },
+  applyButtonText: {
+      color: '#191E29',
+      fontSize: 16,
+      fontWeight: 'bold',
   },
 });
 

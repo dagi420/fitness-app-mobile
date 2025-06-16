@@ -1,14 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ImageBackground,
-  Animated,
-  Dimensions,
-  StatusBar,
-} from 'react-native';
+import React from 'react';
+import { View, Text, TouchableOpacity, StatusBar, StyleSheet, ImageBackground } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation/types';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,104 +10,52 @@ interface WelcomeScreenProps {
   navigation: WelcomeScreenNavigationProp;
 }
 
-const { width, height } = Dimensions.get('window');
-
 const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 1200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 1000,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
-  const handleGetStarted = () => {
-    navigation.navigate('GenderSelection');
-  };
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ImageBackground
         source={{
-          uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80'
+          uri: 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?auto=format&fit=crop&q=80&w=2070'
         }}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
         <LinearGradient
-          colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.7)']}
+          colors={['rgba(25, 30, 41, 0.6)', 'rgba(25, 30, 41, 1)']}
           style={styles.gradient}
         >
-          <View style={styles.content}>
-            <Animated.View
-              style={[
-                styles.headerContainer,
-                {
-                  opacity: fadeAnim,
-                  transform: [{ translateY: slideAnim }],
-                },
-              ]}
-            >
-              <Text style={styles.mainTitle}>DubDub</Text>
-              <Text style={styles.subtitle}>Your Personal Fitness Journey</Text>
-              <Text style={styles.description}>
-                Transform your body, mind, and lifestyle with personalized workouts,
-                nutrition guidance, and progress tracking.
+          <View style={styles.contentContainer}>
+            <View style={styles.textContainer}>
+              <Text style={styles.title}>
+                Meet Your Coach
               </Text>
-            </Animated.View>
+              <Text style={styles.subtitle}>
+                Start your journey with a personalized plan to help you reach your goals.
+              </Text>
+            </View>
 
-            <Animated.View
-              style={[
-                styles.bottomContainer,
-                {
-                  opacity: fadeAnim,
-                },
-              ]}
-            >
-              <View style={styles.featuresContainer}>
-                <View style={styles.feature}>
-                  <Text style={styles.featureIcon}>🏋️</Text>
-                  <Text style={styles.featureText}>AI-Powered Workouts</Text>
-                </View>
-                <View style={styles.feature}>
-                  <Text style={styles.featureIcon}>📊</Text>
-                  <Text style={styles.featureText}>Progress Tracking</Text>
-                </View>
-                <View style={styles.feature}>
-                  <Text style={styles.featureIcon}>🥗</Text>
-                  <Text style={styles.featureText}>Nutrition Plans</Text>
-                </View>
-              </View>
-
-              <TouchableOpacity style={styles.getStartedButton} onPress={handleGetStarted}>
-                <LinearGradient
-                  colors={['#FF6B6B', '#FF8E53']}
-                  style={styles.buttonGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Text style={styles.getStartedText}>Get Started</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.loginButton}
-                onPress={() => navigation.navigate('Login')}
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={[styles.button, styles.primaryButton]}
+                onPress={() => navigation.navigate('Signup')}
+                activeOpacity={0.8}
               >
-                <Text style={styles.loginText}>Already have an account? Sign In</Text>
+                <Text style={styles.primaryButtonText}>
+                  Sign Up
+                </Text>
               </TouchableOpacity>
-            </Animated.View>
+
+              <TouchableOpacity
+                style={[styles.button, styles.outlineButton]}
+                onPress={() => navigation.navigate('Login')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.outlineButtonText}>
+                  Login
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </LinearGradient>
       </ImageBackground>
@@ -130,92 +69,67 @@ const styles = StyleSheet.create({
   },
   backgroundImage: {
     flex: 1,
-    width: '100%',
-    height: '100%',
   },
   gradient: {
     flex: 1,
+    justifyContent: 'flex-end',
   },
-  content: {
-    flex: 1,
-    justifyContent: 'space-between',
-    padding: 24,
-    paddingTop: 60,
-  },
-  headerContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  contentContainer: {
+    padding: 32,
     alignItems: 'center',
   },
-  mainTitle: {
-    fontSize: 48,
-    fontWeight: 'bold',
+  textContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  title: {
     color: '#FFFFFF',
+    fontSize: 40,
+    fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 16,
-    letterSpacing: 2,
   },
   subtitle: {
-    fontSize: 20,
-    color: '#FFFFFF',
+    color: '#A9A9A9', // Lighter secondary text for better readability on gradient
+    fontSize: 18,
     textAlign: 'center',
-    marginBottom: 24,
-    opacity: 0.9,
+    paddingHorizontal: 16,
   },
-  description: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    lineHeight: 24,
-    opacity: 0.8,
-    paddingHorizontal: 20,
+  buttonContainer: {
+    width: '100%',
+    gap: 16,
   },
-  bottomContainer: {
-    paddingBottom: 40,
-  },
-  featuresContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 40,
-    paddingHorizontal: 20,
-  },
-  feature: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  featureIcon: {
-    fontSize: 24,
-    marginBottom: 8,
-  },
-  featureText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    textAlign: 'center',
-    opacity: 0.9,
-  },
-  getStartedButton: {
-    marginBottom: 16,
-    borderRadius: 25,
-    overflow: 'hidden',
-  },
-  buttonGradient: {
+  button: {
+    width: '100%',
     paddingVertical: 16,
-    paddingHorizontal: 32,
+    borderRadius: 25,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  getStartedText: {
+  primaryButton: {
+    backgroundColor: '#01D38D',
+  },
+  primaryButtonText: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
   },
-  loginButton: {
-    alignItems: 'center',
-    paddingVertical: 12,
+  outlineButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#01D38D',
   },
-  loginText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    opacity: 0.8,
+  outlineButtonText: {
+    color: '#01D38D',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
 

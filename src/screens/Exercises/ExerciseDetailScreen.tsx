@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -7,419 +7,285 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Dimensions,
-  Platform,
-  Linking,
+  ImageBackground,
+  StatusBar,
 } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { WorkoutsStackParamList } from '../../navigation/types';
 import { Exercise } from '../../api/exerciseService';
-import { useAppTheme } from '../../styles/useAppTheme';
 import { Ionicons } from '@expo/vector-icons';
 import YoutubePlayer from 'react-native-youtube-iframe';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type ExerciseDetailScreenRouteProp = RouteProp<WorkoutsStackParamList, 'ExerciseDetail'>;
 type ExerciseDetailScreenNavigationProp = StackNavigationProp<WorkoutsStackParamList, 'ExerciseDetail'>;
 
 const { width } = Dimensions.get('window');
-const VIDEO_HEIGHT = (width * 9) / 16; // 16:9 aspect ratio
+
+const getYoutubeVideoId = (url: string) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+  return match && match[2].length === 11 ? match[2] : null;
+};
+
+const DetailChip = ({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) => (
+    <View style={styles.chip}>
+        <Ionicons name={icon} size={18} color="#01D38D" />
+        <Text style={styles.chipText}>{text}</Text>
+    </View>
+);
+
 
 const ExerciseDetailScreen = () => {
   const route = useRoute<ExerciseDetailScreenRouteProp>();
   const navigation = useNavigation<ExerciseDetailScreenNavigationProp>();
-  const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
   const { exercise } = route.params as { exercise: Exercise };
 
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  const getYoutubeVideoId = (url: string) => {
-    if (!url) return null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = url.match(regExp);
-    return match && match[2].length === 11 ? match[2] : null;
-  };
-
   const videoId = exercise.mediaUrls?.video ? getYoutubeVideoId(exercise.mediaUrls.video) : null;
-
-  const handleVideoError = () => {
-    console.log('Error loading video');
-  };
-
-  const openYoutubeApp = async () => {
-    if (!videoId) return;
-    
-    const youtubeUrl = `vnd.youtube://${videoId}`;
-    const webUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-    try {
-      const supported = await Linking.canOpenURL(youtubeUrl);
-      await Linking.openURL(supported ? youtubeUrl : webUrl);
-    } catch (error) {
-      console.error('Error opening YouTube:', error);
-    }
-  };
-
-  const renderMetadataItem = (icon: keyof typeof Ionicons.glyphMap, label: string, value?: string | string[]) => {
-    if (!value) return null;
-    const displayValue = Array.isArray(value) ? value.join(', ') : value;
-    
+  
+  const renderSection = (title: string, content: React.ReactNode) => {
+    if(!content) return null;
     return (
-      <View style={styles.metadataItem}>
-        <Ionicons name={icon} size={24} color={theme.currentColors.primary} />
-        <View style={styles.metadataText}>
-          <Text style={[styles.metadataLabel, { color: theme.currentColors.textSecondary }]}>
-            {label}
-          </Text>
-          <Text style={[styles.metadataValue, { color: theme.currentColors.textPrimary }]}>
-            {displayValue}
-          </Text>
-        </View>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {content}
       </View>
-    );
+    )
   };
+  
+  const descriptionContent = exercise.description?.full || exercise.description?.short ? (
+     <Text style={styles.bodyText}>
+        {exercise.description.full || exercise.description.short}
+      </Text>
+  ) : null;
+  
+  const instructionsContent = exercise.instructions?.length > 0 ? exercise.instructions.map((instruction, index) => (
+      <View key={index} style={styles.instructionItem}>
+        <View style={styles.instructionNumberContainer}>
+            <Text style={styles.instructionNumber}>{index + 1}</Text>
+        </View>
+        <Text style={styles.instructionText}>{instruction}</Text>
+      </View>
+    )) : null;
+
+  const benefitsContent = exercise.description?.benefits?.length > 0 ? exercise.description.benefits.map((benefit, index) => (
+    <View key={index} style={styles.bulletItem}>
+        <Ionicons name="checkmark-circle-outline" size={20} color="#01D38D" style={styles.bulletIcon} />
+        <Text style={styles.bulletText}>{benefit}</Text>
+    </View>
+  )) : null;
+
+  const mistakesContent = exercise.description?.commonMistakes?.length > 0 ? exercise.description.commonMistakes.map((mistake, index) => (
+      <View key={index} style={styles.bulletItem}>
+          <Ionicons name="alert-circle-outline" size={20} color="#FF6B6B" style={styles.bulletIcon} />
+          <Text style={styles.bulletText}>{mistake}</Text>
+      </View>
+  )) : null;
+  
+  const equipmentContent = exercise.equipmentNeeded?.length > 0 ? (
+    <View style={styles.tagContainer}>
+        {exercise.equipmentNeeded.map(item => <Text key={item} style={styles.tag}>{item}</Text>)}
+    </View>
+  ) : null;
+  
+   const muscleGroupsContent = exercise.targetMuscleGroups?.length > 0 ? (
+    <View style={styles.tagContainer}>
+        {exercise.targetMuscleGroups.map(item => <Text key={item} style={styles.tag}>{item}</Text>)}
+    </View>
+  ) : null;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.currentColors.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.currentColors.surface }]}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={theme.currentColors.primary} />
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: theme.currentColors.textPrimary }]}>
-            {exercise.name}
-          </Text>
-        </View>
-
-        {/* Video Section */}
-        {videoId ? (
-          <View style={styles.videoContainer}>
-            <YoutubePlayer
-              height={VIDEO_HEIGHT}
-              play={isPlaying}
-              videoId={videoId}
-              onError={handleVideoError}
-            />
-            <TouchableOpacity 
-              style={[styles.youtubeButton, { backgroundColor: theme.currentColors.error }]}
-              onPress={openYoutubeApp}
-            >
-              <Ionicons name="logo-youtube" size={20} color="white" />
-              <Text style={styles.youtubeButtonText}>Open in YouTube</Text>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <ScrollView>
+        <ImageBackground
+          source={{ uri: exercise.imageUrl || 'https://via.placeholder.com/400x300' }}
+          style={[styles.header, { paddingTop: insets.top }]}
+        >
+          <View style={styles.headerOverlay}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
             </TouchableOpacity>
+            <Text style={styles.title} numberOfLines={2}>{exercise.name}</Text>
           </View>
-        ) : (
-          <View style={[styles.noVideoContainer, { backgroundColor: theme.currentColors.border }]}>
-            <Ionicons name="videocam-off-outline" size={48} color={theme.currentColors.textSecondary} />
-            <Text style={[styles.noVideoText, { color: theme.currentColors.textSecondary }]}>
-              No video available
-            </Text>
+        </ImageBackground>
+
+        <View style={styles.contentContainer}>
+          <View style={styles.chipsContainer}>
+            {exercise.difficulty && <DetailChip icon="pulse-outline" text={exercise.difficulty} />}
+            {exercise.category && <DetailChip icon="grid-outline" text={exercise.category} />}
+            {exercise.equipmentNeeded?.[0] && <DetailChip icon="barbell-outline" text={exercise.equipmentNeeded[0]} />}
           </View>
-        )}
+          
+          {renderSection("Description", descriptionContent)}
+          
+          {renderSection("Target Muscle Groups", muscleGroupsContent)}
+          
+          {renderSection("Equipment Needed", equipmentContent)}
 
-        {/* Metadata Section */}
-        <View style={[styles.metadataContainer, { backgroundColor: theme.currentColors.surface }]}>
-          {exercise.equipmentNeeded?.length > 0 && renderMetadataItem('barbell-outline', 'Equipment', exercise.equipmentNeeded)}
-          {exercise.targetMuscleGroups?.length > 0 && renderMetadataItem('fitness-outline', 'Primary Muscles', exercise.targetMuscleGroups)}
-          {exercise.secondaryMuscleGroups && exercise.secondaryMuscleGroups.length > 0 && renderMetadataItem('body-outline', 'Secondary Muscles', exercise.secondaryMuscleGroups)}
-          {exercise.difficulty && renderMetadataItem('speedometer-outline', 'Difficulty', exercise.difficulty)}
-          {exercise.type && renderMetadataItem('fitness-outline', 'Type', exercise.type)}
-          {exercise.metadata?.recommendedRestPeriod && renderMetadataItem('time-outline', 'Rest Period', exercise.metadata.recommendedRestPeriod)}
-          {exercise.metadata?.averageCaloriesBurn && renderMetadataItem('flame-outline', 'Calories/min', exercise.metadata.averageCaloriesBurn.toString())}
-        </View>
-
-        {/* Description Section */}
-        {(exercise.description?.full || exercise.description?.short) && (
-          <View style={[styles.section, { backgroundColor: theme.currentColors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
-              Description
-            </Text>
-            <Text style={[styles.description, { color: theme.currentColors.textSecondary }]}>
-              {exercise.description.full || exercise.description.short}
-            </Text>
-          </View>
-        )}
-
-        {/* Benefits Section */}
-        {exercise.description?.benefits?.length > 0 && (
-          <View style={[styles.section, { backgroundColor: theme.currentColors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
-              Benefits
-            </Text>
-            {exercise.description.benefits.map((benefit, index) => (
-              <View key={index} style={styles.bulletPoint}>
-                <Text style={[styles.bullet, { color: theme.currentColors.primary }]}>•</Text>
-                <Text style={[styles.bulletText, { color: theme.currentColors.textSecondary }]}>
-                  {benefit}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Instructions Section */}
-        {exercise.instructions?.length > 0 && (
-          <View style={[styles.section, { backgroundColor: theme.currentColors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
-              Instructions
-            </Text>
-            {exercise.instructions.map((instruction, index) => (
-              <View key={index} style={styles.instructionItem}>
-                <Text style={[styles.instructionNumber, { color: theme.currentColors.primary }]}>
-                  {index + 1}
-                </Text>
-                <Text style={[styles.instructionText, { color: theme.currentColors.textSecondary }]}>
-                  {instruction}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Common Mistakes Section */}
-        {exercise.description?.commonMistakes?.length > 0 && (
-          <View style={[styles.section, { backgroundColor: theme.currentColors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
-              Common Mistakes to Avoid
-            </Text>
-            {exercise.description.commonMistakes.map((mistake, index) => (
-              <View key={index} style={styles.bulletPoint}>
-                <Text style={[styles.bullet, { color: theme.currentColors.error }]}>⚠</Text>
-                <Text style={[styles.bulletText, { color: theme.currentColors.textSecondary }]}>
-                  {mistake}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Modifications Section */}
-        {(exercise.modifications?.easier?.length > 0 || exercise.modifications?.harder?.length > 0) && (
-          <View style={[styles.section, { backgroundColor: theme.currentColors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
-              Exercise Variations
-            </Text>
-            {exercise.modifications?.easier?.length > 0 && (
-              <View style={styles.variationGroup}>
-                <Text style={[styles.variationTitle, { color: theme.currentColors.success }]}>
-                  Easier Variations:
-                </Text>
-                {exercise.modifications.easier.map((mod, index) => (
-                  <View key={index} style={styles.bulletPoint}>
-                    <Text style={[styles.bullet, { color: theme.currentColors.success }]}>•</Text>
-                    <Text style={[styles.bulletText, { color: theme.currentColors.textSecondary }]}>
-                      {mod}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-            {exercise.modifications?.harder?.length > 0 && (
-              <View style={styles.variationGroup}>
-                <Text style={[styles.variationTitle, { color: theme.currentColors.error }]}>
-                  Advanced Variations:
-                </Text>
-                {exercise.modifications.harder.map((mod, index) => (
-                  <View key={index} style={styles.bulletPoint}>
-                    <Text style={[styles.bullet, { color: theme.currentColors.error }]}>•</Text>
-                    <Text style={[styles.bulletText, { color: theme.currentColors.textSecondary }]}>
-                      {mod}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Recommended Sets Section */}
-        {exercise.recommendedSets && (
-          <View style={[styles.section, { backgroundColor: theme.currentColors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
-              Recommended Sets & Reps
-            </Text>
-            <View style={styles.recommendedSets}>
-              {exercise.recommendedSets.beginner && (
-                <View style={styles.recommendedLevel}>
-                  <Text style={[styles.levelTitle, { color: theme.currentColors.success }]}>
-                    Beginner
-                  </Text>
-                  <Text style={[styles.levelDetail, { color: theme.currentColors.textSecondary }]}>
-                    {exercise.recommendedSets.beginner}
-                  </Text>
-                </View>
-              )}
-              {exercise.recommendedSets.intermediate && (
-                <View style={styles.recommendedLevel}>
-                  <Text style={[styles.levelTitle, { color: theme.currentColors.warning }]}>
-                    Intermediate
-                  </Text>
-                  <Text style={[styles.levelDetail, { color: theme.currentColors.textSecondary }]}>
-                    {exercise.recommendedSets.intermediate}
-                  </Text>
-                </View>
-              )}
-              {exercise.recommendedSets.advanced && (
-                <View style={styles.recommendedLevel}>
-                  <Text style={[styles.levelTitle, { color: theme.currentColors.error }]}>
-                    Advanced
-                  </Text>
-                  <Text style={[styles.levelDetail, { color: theme.currentColors.textSecondary }]}>
-                    {exercise.recommendedSets.advanced}
-                  </Text>
-                </View>
-              )}
+          {videoId && renderSection("Video Guide", (
+            <View style={styles.videoContainer}>
+                <YoutubePlayer
+                    height={(width - 40) * 9 / 16}
+                    play={false}
+                    videoId={videoId}
+                    webViewStyle={{ opacity: 0.99 }} // a common fix for render issues
+                />
             </View>
-          </View>
-        )}
+          ))}
+          
+          {instructionsContent && renderSection("Instructions", instructionsContent)}
+
+          {benefitsContent && renderSection("Benefits", benefitsContent)}
+          
+          {mistakesContent && renderSection("Common Mistakes", mistakesContent)}
+          
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 20,
+    backgroundColor: '#191E29',
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    height: 280,
+    justifyContent: 'flex-end',
+  },
+  headerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(25, 30, 41, 0.5)',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   backButton: {
-    marginRight: 16,
+    position: 'absolute',
+    left: 20,
+    top: 50, // Adjust as needed for status bar height
+    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
-    fontSize: 20,
+    fontSize: 32,
     fontWeight: 'bold',
-    flex: 1,
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 10,
   },
-  videoContainer: {
-    width: '100%',
-    marginBottom: 16,
+  contentContainer: {
+    padding: 20,
+    paddingTop: 10,
+    marginTop: -20,
+    backgroundColor: '#191E29',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
-  youtubeButton: {
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 25,
+  },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 8,
-    marginTop: 8,
-    marginHorizontal: 16,
-    borderRadius: 8,
+    backgroundColor: '#1E2328',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 15,
   },
-  youtubeButtonText: {
-    color: 'white',
+  chipText: {
+    color: '#FFFFFF',
     marginLeft: 8,
-    fontWeight: '600',
-  },
-  noVideoContainer: {
-    height: VIDEO_HEIGHT,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  noVideoText: {
-    marginTop: 8,
-    fontSize: 16,
-  },
-  metadataContainer: {
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-  },
-  metadataItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  metadataText: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  metadataLabel: {
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  metadataValue: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
   },
   section: {
-    margin: 16,
-    marginTop: 0,
-    padding: 16,
-    borderRadius: 12,
+    marginBottom: 25,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 12,
+    color: '#FFFFFF',
+    marginBottom: 15,
   },
-  description: {
+  bodyText: {
     fontSize: 16,
+    color: '#A0A5B1',
     lineHeight: 24,
+  },
+  videoContainer: {
+    borderRadius: 15,
+    overflow: 'hidden',
   },
   instructionItem: {
     flexDirection: 'row',
-    marginBottom: 12,
+    marginBottom: 15,
+    alignItems: 'flex-start',
+  },
+  instructionNumberContainer: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#01D38D',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
   },
   instructionNumber: {
-    fontSize: 16,
+    color: '#191E29',
     fontWeight: 'bold',
-    marginRight: 12,
-    width: 24,
+    fontSize: 16,
   },
   instructionText: {
     flex: 1,
+    color: '#E0E0E0',
     fontSize: 16,
     lineHeight: 24,
   },
-  bulletPoint: {
+  bulletItem: {
     flexDirection: 'row',
-    marginBottom: 8,
     alignItems: 'flex-start',
+    marginBottom: 10,
   },
-  bullet: {
-    fontSize: 16,
-    marginRight: 8,
-    width: 16,
+  bulletIcon: {
+    marginRight: 10,
+    marginTop: 2,
   },
   bulletText: {
     flex: 1,
+    color: '#E0E0E0',
     fontSize: 16,
     lineHeight: 24,
   },
-  variationGroup: {
-    marginBottom: 16,
+  tagContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
   },
-  variationTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  recommendedSets: {
-    marginTop: 8,
-  },
-  recommendedLevel: {
-    marginBottom: 12,
-  },
-  levelTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  levelDetail: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
+  tag: {
+      backgroundColor: '#1E2328',
+      color: '#A0A5B1',
+      paddingVertical: 8,
+      paddingHorizontal: 15,
+      borderRadius: 20,
+      fontSize: 14,
+      fontWeight: '500',
+      overflow: 'hidden', // for rounded corners on iOS
+  }
 });
 
 export default ExerciseDetailScreen; 

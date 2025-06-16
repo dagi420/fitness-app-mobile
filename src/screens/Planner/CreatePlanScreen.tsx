@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  SafeAreaView, 
-  Alert, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  Alert,
   ActivityIndicator,
   ScrollView,
-  Dimensions,
-  Animated,
   TouchableOpacity,
+  ImageBackground,
+  StatusBar,
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, AIPlanConfigData, AIWorkoutConfigData } from '../../navigation/types';
@@ -17,38 +17,78 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../store/AuthContext';
 import { generateAIWorkoutPlan } from '../../api/workoutService';
 import { generateAIDietPlan } from '../../api/dietService';
-import { useAppTheme } from '../../styles/useAppTheme';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { NeumorphicButton } from '../../components/NeumorphicButton';
-import { AppText } from '../../components/AppText';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type CreatePlanScreenNavigationProp = StackNavigationProp<RootStackParamList, 'CreatePlan'>;
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = width * 0.9;
+const ActionCard = ({ title, description, icon, imageUrl, onPress, isLoading = false }) => (
+  <TouchableOpacity onPress={onPress} style={styles.card} disabled={isLoading}>
+    <ImageBackground
+      source={{ uri: imageUrl }}
+      style={styles.cardBackground}
+      imageStyle={{ borderRadius: 20 }}
+    >
+      <View style={styles.cardOverlay}>
+        <View style={styles.cardIconContainer}>
+            <Ionicons name={icon} size={32} color="#FFFFFF" />
+        </View>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={styles.cardDescription}>{description}</Text>
+        {isLoading && (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator color="#FFFFFF" />
+            </View>
+        )}
+      </View>
+    </ImageBackground>
+  </TouchableOpacity>
+);
 
 const CreatePlanScreen = () => {
   const navigation = useNavigation<CreatePlanScreenNavigationProp>();
+  const insets = useSafeAreaInsets();
   const { user, token } = useAuth();
-  const theme = useAppTheme();
   const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
   const [isGeneratingDiet, setIsGeneratingDiet] = useState(false);
-  const [selectedOption, setSelectedOption] = useState<'workout' | 'diet' | null>(null);
 
-  // Animation values
-  const scaleAnim = React.useRef(new Animated.Value(1)).current;
-  const opacityAnim = React.useRef(new Animated.Value(1)).current;
+  const handleAIWorkoutGenerate = () => {
+    if (!user || !token) {
+      Alert.alert('Authentication Error', 'User not authenticated.');
+      return;
+    }
+    navigation.navigate('AIWorkoutConfigurationScreen', {
+      onSubmit: async (config: AIWorkoutConfigData) => {
+        setIsGeneratingWorkout(true);
+        try {
+          const response = await generateAIWorkoutPlan(token, config);
+          if (response.success && response.plan) {
+            Alert.alert('Success', 'AI workout plan generated successfully!');
+            navigation.navigate('MainApp', { screen: 'Workouts', params: { screen: 'WorkoutList' } });
+          } else {
+            Alert.alert('Error', response.message || 'Failed to generate AI workout plan.');
+          }
+        } catch (apiError) {
+          Alert.alert('Error', apiError instanceof Error ? apiError.message : 'An unexpected error occurred.');
+        } finally {
+          setIsGeneratingWorkout(false);
+        }
+      },
+    });
+  };
 
+  const handleManualCreate = () => {
+    navigation.navigate('ManualPlanCreator', { preSelectedExercises: undefined });
+  };
+  
   const handleAIDietGenerate = () => {
     if (!user || !token) {
       Alert.alert("Authentication Error", "User not authenticated.");
       return;
     }
-    setSelectedOption('diet');
     navigation.navigate('AIConfigurationScreen', {
       onSubmit: async (config: AIPlanConfigData) => {
         setIsGeneratingDiet(true);
-        Alert.alert("AI Diet Generation", "Generating your personalized diet plan... Please wait.");
         try {
           const response = await generateAIDietPlan(token, config);
           if (response.success && response.plan) {
@@ -61,324 +101,128 @@ const CreatePlanScreen = () => {
           Alert.alert("Error", apiError instanceof Error ? apiError.message : "An unexpected error occurred.");
         } finally {
           setIsGeneratingDiet(false);
-          setSelectedOption(null);
         }
       }
     });
-  };
-
-  const handleAIWorkoutGenerate = () => {
-    if (!user || !token) {
-      Alert.alert("Authentication Error", "User not authenticated.");
-      return;
-    }
-    setSelectedOption('workout');
-    navigation.navigate('AIWorkoutConfigurationScreen', {
-      onSubmit: async (config: AIWorkoutConfigData) => {
-        setIsGeneratingWorkout(true);
-        Alert.alert("AI Workout Generation", "Generating your personalized workout plan... Please wait.");
-        try {
-          const response = await generateAIWorkoutPlan(token, config);
-          if (response.success && response.plan) {
-            Alert.alert("Success", "AI workout plan generated successfully!");
-            navigation.navigate('MainApp', { screen: 'Workouts', params: { screen: 'WorkoutList' } });
-          } else {
-            Alert.alert("Error", response.message || "Failed to generate AI workout plan.");
-          }
-        } catch (apiError) {
-          Alert.alert("Error", apiError instanceof Error ? apiError.message : "An unexpected error occurred.");
-        } finally {
-          setIsGeneratingWorkout(false);
-          setSelectedOption(null);
-        }
-      }
-    });
-  };
-
-  const handleManualCreate = () => {
-    navigation.navigate('ManualPlanCreator', { preSelectedExercises: undefined });
-  };
-
-  const handleOptionPress = (option: 'workout' | 'diet') => {
-    // Animate the press
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(scaleAnim, {
-          toValue: 0.95,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 0.8,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.parallel([
-        Animated.timing(scaleAnim, {
-          toValue: 1,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start();
-
-    setSelectedOption(option);
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.currentColors.background }]}>
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContentContainer}
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <ScrollView
+        contentContainerStyle={[styles.scrollContainer, {paddingBottom: insets.bottom + 20}]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.headerContainer}>
-          <AppText variant="h1" style={[styles.title, { color: theme.currentColors.textPrimary }]}>
-            Create Your Plan
-          </AppText>
-          <AppText 
-            variant="body1" 
-            style={[styles.subtitle, { color: theme.currentColors.textSecondary }]}
-          >
-            Choose how you'd like to build your next fitness journey
-          </AppText>
+        <View style={styles.header}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Create New Plan</Text>
         </View>
 
-        {/* Workout Section */}
-        <View style={styles.sectionContainer}>
-          <AppText variant="h2" style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
-            Workout Plans
-          </AppText>
-          
-          {/* AI Workout Card */}
-          <TouchableOpacity 
-            onPress={() => handleAIWorkoutGenerate()}
-            style={[
-              styles.card,
-              { backgroundColor: theme.currentColors.surface }
-            ]}
-            disabled={isGeneratingWorkout}
-          >
-            <View style={styles.cardContent}>
-              <View style={styles.cardIconContainer}>
-                <Ionicons 
-                  name="flash" 
-                  size={32} 
-                  color={theme.currentColors.primary} 
-                />
-              </View>
-              <View style={styles.cardTextContainer}>
-                <AppText variant="h3" style={{ color: theme.currentColors.textPrimary }}>
-                  AI Workout Generator
-                </AppText>
-                <AppText variant="body2" style={{ color: theme.currentColors.textSecondary }}>
-                  Let our AI create a personalized workout plan based on your goals
-                </AppText>
-              </View>
-              {isGeneratingWorkout ? (
-                <ActivityIndicator size="small" color={theme.currentColors.primary} />
-              ) : (
-                <Ionicons 
-                  name="chevron-forward" 
-                  size={24} 
-                  color={theme.currentColors.textSecondary} 
-                />
-              )}
-            </View>
-          </TouchableOpacity>
+        <Text style={styles.sectionTitle}>Workout Plan</Text>
+        <ActionCard
+          title="Generate with AI"
+          description="Let our AI build a custom workout plan for you"
+          icon="sparkles-outline"
+          imageUrl="https://images.unsplash.com/photo-1599058917212-d750089bc07e?fit=crop&w=1200&q=80"
+          onPress={handleAIWorkoutGenerate}
+          isLoading={isGeneratingWorkout}
+        />
+        <ActionCard
+          title="Create Manually"
+          description="Build your own workout from our exercise library"
+          icon="build-outline"
+          imageUrl="https://images.unsplash.com/photo-1576678927484-cc907957088c?fit=crop&w=1200&q=80"
+          onPress={handleManualCreate}
+        />
 
-          {/* Manual Workout Card */}
-          <TouchableOpacity 
-            onPress={handleManualCreate}
-            style={[
-              styles.card,
-              { backgroundColor: theme.currentColors.surface }
-            ]}
-          >
-            <View style={styles.cardContent}>
-              <View style={styles.cardIconContainer}>
-                <Ionicons 
-                  name="create" 
-                  size={32} 
-                  color={theme.currentColors.primary} 
-                />
-              </View>
-              <View style={styles.cardTextContainer}>
-                <AppText variant="h3" style={{ color: theme.currentColors.textPrimary }}>
-                  Manual Workout Creator
-                </AppText>
-                <AppText variant="body2" style={{ color: theme.currentColors.textSecondary }}>
-                  Build your own workout plan from our exercise library
-                </AppText>
-              </View>
-              <Ionicons 
-                name="chevron-forward" 
-                size={24} 
-                color={theme.currentColors.textSecondary} 
-              />
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Diet Section */}
-        <View style={styles.sectionContainer}>
-          <AppText variant="h2" style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
-            Diet Plans
-          </AppText>
-          
-          {/* AI Diet Card */}
-          <TouchableOpacity 
-            onPress={() => handleAIDietGenerate()}
-            style={[
-              styles.card,
-              { backgroundColor: theme.currentColors.surface }
-            ]}
-            disabled={isGeneratingDiet}
-          >
-            <View style={styles.cardContent}>
-              <View style={styles.cardIconContainer}>
-                <Ionicons 
-                  name="nutrition" 
-                  size={32} 
-                  color={theme.currentColors.primary} 
-                />
-              </View>
-              <View style={styles.cardTextContainer}>
-                <AppText variant="h3" style={{ color: theme.currentColors.textPrimary }}>
-                  AI Diet Generator
-                </AppText>
-                <AppText variant="body2" style={{ color: theme.currentColors.textSecondary }}>
-                  Get a personalized meal plan tailored to your needs
-                </AppText>
-              </View>
-              {isGeneratingDiet ? (
-                <ActivityIndicator size="small" color={theme.currentColors.primary} />
-              ) : (
-                <Ionicons 
-                  name="chevron-forward" 
-                  size={24} 
-                  color={theme.currentColors.textSecondary} 
-                />
-              )}
-            </View>
-          </TouchableOpacity>
-
-          {/* Manual Diet Card */}
-          <TouchableOpacity 
-            onPress={() => navigation.navigate('ManualDietPlanner')}
-            style={[
-              styles.card,
-              { backgroundColor: theme.currentColors.surface }
-            ]}
-          >
-            <View style={styles.cardContent}>
-              <View style={styles.cardIconContainer}>
-                <Ionicons 
-                  name="restaurant" 
-                  size={32} 
-                  color={theme.currentColors.primary} 
-                />
-              </View>
-              <View style={styles.cardTextContainer}>
-                <AppText variant="h3" style={{ color: theme.currentColors.textPrimary }}>
-                  Manual Diet Creator
-                </AppText>
-                <AppText variant="body2" style={{ color: theme.currentColors.textSecondary }}>
-                  Create your own meal plan with custom foods
-                </AppText>
-              </View>
-              <Ionicons 
-                name="chevron-forward" 
-                size={24} 
-                color={theme.currentColors.textSecondary} 
-              />
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Close Button */}
-        <NeumorphicButton
-          neumorphicType="pressedIn"
-          onPress={() => navigation.goBack()}
-          containerStyle={styles.closeButton}
-          buttonType="secondary"
-        >
-          <AppText variant="button" style={{ color: theme.currentColors.textSecondary }}>
-            Close
-          </AppText>
-        </NeumorphicButton>
+        <Text style={styles.sectionTitle}>Diet Plan</Text>
+        <ActionCard
+          title="Generate with AI"
+          description="Get a personalized diet plan to match your goals"
+          icon="sparkles-outline"
+          imageUrl="https://images.unsplash.com/photo-1498837167922-ddd27525d352?fit=crop&w=1200&q=80"
+          onPress={handleAIDietGenerate}
+          isLoading={isGeneratingDiet}
+        />
       </ScrollView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
+    backgroundColor: '#191E29',
   },
-  scrollView: {
-    flex: 1,
+  scrollContainer: {
+    paddingHorizontal: 20,
   },
-  scrollContentContainer: {
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-  },
-  headerContainer: {
-    marginBottom: 32,
-  },
-  title: {
-    marginBottom: 8,
-    textAlign: 'left',
-  },
-  subtitle: {
-    textAlign: 'left',
-  },
-  sectionContainer: {
-    marginBottom: 32,
-  },
-  sectionTitle: {
-    marginBottom: 16,
-  },
-  card: {
-    borderRadius: 16,
-    marginBottom: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardContent: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 15,
+    marginBottom: 10,
+  },
+  backButton: {
+    marginRight: 15,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginTop: 20,
+    marginBottom: 15,
+  },
+  card: {
+    height: 180,
+    borderRadius: 20,
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  cardBackground: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  cardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 20,
+    padding: 20,
+    justifyContent: 'flex-end',
   },
   cardIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
   },
-  cardTextContainer: {
-    flex: 1,
+  cardTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: 'bold',
   },
-  closeButton: {
-    marginTop: 16,
-    alignSelf: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 12,
+  cardDescription: {
+    color: '#E0E0E0',
+    fontSize: 15,
+    marginTop: 5,
   },
+  loadingContainer: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+  }
 });
 
 export default CreatePlanScreen; 

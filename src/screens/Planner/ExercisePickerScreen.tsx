@@ -1,348 +1,213 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
-  SectionList,
-  ActivityIndicator,
+  FlatList,
   TouchableOpacity,
   SafeAreaView,
-  Dimensions,
-  Platform,
-  Alert,
+  ActivityIndicator,
+  TextInput,
+  Image,
   StatusBar,
 } from 'react-native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/types';
-import { BaseExercise } from './ManualPlanCreatorScreen';
-import { fetchAllExercises } from '../../api/exerciseService';
+import { Exercise, fetchAllExercises } from '../../api/exerciseService';
 import { useAuth } from '../../store/AuthContext';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { useAppTheme } from '../../styles/useAppTheme';
-import { AppText } from '../../components/AppText';
-import { NeumorphicButton } from '../../components/NeumorphicButton';
-import { ScrollView } from 'react-native-gesture-handler';
-
-const { width } = Dimensions.get('window');
-const CARD_MARGIN = 8;
+import { Ionicons } from '@expo/vector-icons';
+import { FilterModal } from '../../components/FilterModal'; // Assuming we extract FilterModal to a reusable component
+import { BaseExercise } from './ManualPlanCreatorScreen';
 
 type ExercisePickerNavigationProp = StackNavigationProp<RootStackParamList, 'ExercisePicker'>;
+type ExercisePickerRouteProp = RouteProp<RootStackParamList, 'ExercisePicker'>;
 
-interface ExerciseListItemProps {
-  item: BaseExercise;
-  isSelected: boolean;
-  onToggleSelect: (exerciseId: string) => void;
-}
+const MUSCLE_GROUPS = ['All', 'Back', 'Chest', 'Shoulders', 'Biceps', 'Triceps', 'Legs', 'Abs', 'Cardio'];
+const DIFFICULTIES = ['All', 'Beginner', 'Intermediate', 'Advanced'];
 
-interface ExerciseSection {
-  title: string;
-  data: BaseExercise[];
-}
-
-const ExerciseListItem: React.FC<ExerciseListItemProps> = React.memo(({ item, isSelected, onToggleSelect }) => {
-  const theme = useAppTheme();
-  
-  return (
-    <TouchableOpacity 
-      onPress={() => onToggleSelect(item._id)} 
-      style={[
-        styles.itemContainer,
-        { backgroundColor: theme.currentColors.surface }
-      ]}
-      activeOpacity={0.7}
-    >
-      <View style={styles.itemContent}>
-        <View style={styles.itemHeader}>
-          <View style={styles.itemTitleContainer}>
-            <AppText 
-              variant="h3" 
-              style={{ color: theme.currentColors.textPrimary }}
-            >
-              {item.name}
-            </AppText>
-            <View style={styles.badgesContainer}>
-              <View style={[
-                styles.badge,
-                { backgroundColor: theme.currentColors.primary + '20' }
-              ]}>
-                <Ionicons 
-                  name={item.type.toLowerCase() === 'cardio' ? 'heart' : 'barbell'} 
-                  size={12} 
-                  color={theme.currentColors.primary}
-                />
-                <AppText 
-                  variant="caption" 
-                  style={[styles.badgeText, { color: theme.currentColors.primary }]}
-                >
-                  {item.type}
-                </AppText>
-              </View>
-              <View style={[
-                styles.badge,
-                { backgroundColor: theme.currentColors.secondary + '20' }
-              ]}>
-                <Ionicons 
-                  name={
-                    item.difficulty === 'Beginner' ? 'leaf' :
-                    item.difficulty === 'Intermediate' ? 'flame' : 'star'
-                  } 
-                  size={12} 
-                  color={theme.currentColors.secondary}
-                />
-                <AppText 
-                  variant="caption" 
-                  style={[styles.badgeText, { color: theme.currentColors.secondary }]}
-                >
-                  {item.difficulty}
-                </AppText>
-              </View>
-            </View>
-          </View>
-          <TouchableOpacity 
-            onPress={() => onToggleSelect(item._id)}
-            style={[
-              styles.checkboxContainer,
-              { 
-                backgroundColor: isSelected ? theme.currentColors.primary : 'transparent',
-                borderColor: isSelected ? theme.currentColors.primary : theme.currentColors.border
-              }
-            ]}
-          >
-            {isSelected && <Ionicons name="checkmark" size={16} color="white" />}
-          </TouchableOpacity>
-        </View>
-
-        {item.description && (
-          <AppText 
-            variant="body2" 
-            style={[
-              styles.description,
-              { color: theme.currentColors.textSecondary }
-            ]}
-            numberOfLines={2}
-          >
-            {item.description}
-          </AppText>
-        )}
-
-        {item.targetMuscleGroups && item.targetMuscleGroups.length > 0 && (
-          <View style={styles.muscleGroupsContainer}>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.muscleGroupsContent}
-            >
-              {item.targetMuscleGroups.map((muscle, index) => (
-                <View 
-                  key={index}
-                  style={[
-                    styles.muscleTag,
-                    { backgroundColor: theme.currentColors.surface }
-                  ]}
-                >
-                  <AppText 
-                    variant="caption" 
-                    style={{ color: theme.currentColors.textSecondary }}
-                  >
-                    {muscle}
-                  </AppText>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-});
-
-const SectionHeader: React.FC<{ title: string }> = ({ title }) => {
-  const theme = useAppTheme();
-  return (
-    <View style={[
-      styles.sectionHeader,
-      { backgroundColor: theme.currentColors.background }
-    ]}>
-      <AppText 
-        variant="h2" 
-        style={{ color: theme.currentColors.textPrimary }}
-      >
-        {title}
-      </AppText>
+const ExercisePickerCard = ({ item, isSelected, onSelect }: { item: Exercise; isSelected: boolean; onSelect: () => void }) => (
+  <TouchableOpacity style={styles.card} onPress={onSelect}>
+    <Image source={{ uri: item.imageUrl || 'https://via.placeholder.com/150' }} style={styles.cardImage} />
+    <View style={styles.cardContent}>
+      <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
+      <Text style={styles.cardSubtitle}>{item.category || 'N/A'}</Text>
     </View>
-  );
-};
+    <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+        {isSelected && <Ionicons name="checkmark" size={18} color="#191E29" />}
+    </View>
+  </TouchableOpacity>
+);
 
 const ExercisePickerScreen = () => {
   const navigation = useNavigation<ExercisePickerNavigationProp>();
+  const route = useRoute<ExercisePickerRouteProp>();
+  const { fromScreen } = route.params;
   const { token } = useAuth();
-  const theme = useAppTheme();
-  
-  const [allExercises, setAllExercises] = useState<BaseExercise[]>([]);
-  const [selectedExercises, setSelectedExercises] = useState<Record<string, BaseExercise>>({});
+
+  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [selectedExercises, setSelectedExercises] =useState<Record<string, Exercise>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
+
+  const [filters, setFilters] = useState({
+    muscleGroup: 'All',
+    difficulty: 'All',
+    equipment: 'All',
+  });
+  
+  const equipmentList = useMemo(() => {
+      const allEquipment = new Set<string>();
+      exercises.forEach(ex => {
+          if(ex.equipmentNeeded) {
+            ex.equipmentNeeded.forEach(eq => allEquipment.add(eq));
+          }
+      });
+      return Array.from(allEquipment).sort();
+  }, [exercises]);
+  
+  const loadExercises = async () => {
+    if (!token) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetchAllExercises(token);
+      if (response.success && response.exercises) {
+        setExercises(response.exercises);
+      } else {
+        setError(response.message || 'Failed to load exercises');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadExercises = async () => {
-      if (!token) {
-        setError('Authentication token not found.');
-        setIsLoading(false);
-        return;
-      }
-      try {
-        setIsLoading(true);
-        setError(null);
-        const response = await fetchAllExercises(token);
-        if (response.success && response.exercises) {
-          // Map Exercise type to BaseExercise type with safe description handling
-          const mappedExercises: BaseExercise[] = response.exercises.map(exercise => ({
-            _id: exercise._id,
-            name: exercise.name,
-            type: exercise.type,
-            category: exercise.category,
-            difficulty: exercise.difficulty,
-            targetMuscleGroups: exercise.targetMuscleGroups,
-            equipmentNeeded: exercise.equipmentNeeded,
-            description: typeof exercise.description === 'string' 
-              ? exercise.description 
-              : exercise.description?.short || exercise.description?.full || '',
-            videoUrl: exercise.mediaUrls?.video,
-            imageUrl: exercise.mediaUrls?.image,
-            instructions: exercise.instructions
-          }));
-          setAllExercises(mappedExercises);
-        } else {
-          setError(response.message || 'Failed to load exercises.');
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
     loadExercises();
   }, [token]);
 
-  const exerciseSections = useMemo(() => {
-    if (allExercises.length === 0) return [];
-    
-    const grouped: { [key: string]: BaseExercise[] } = {};
-    allExercises.forEach(exercise => {
-      const category = exercise.category || 'Uncategorized';
-      if (!grouped[category]) {
-        grouped[category] = [];
-      }
-      grouped[category].push(exercise);
-    });
-
-    return Object.keys(grouped)
-      .map(category => ({
-        title: category,
-        data: grouped[category],
-      }))
-      .sort((a, b) => a.title.localeCompare(b.title));
-  }, [allExercises]);
-
-  const handleToggleSelect = (exerciseId: string) => {
-    setSelectedExercises(prevSelected => {
-      const newSelected = { ...prevSelected };
-      if (newSelected[exerciseId]) {
-        delete newSelected[exerciseId];
+  const handleToggleSelect = (exercise: Exercise) => {
+    setSelectedExercises(prev => {
+      const newSelected = { ...prev };
+      if (newSelected[exercise._id]) {
+        delete newSelected[exercise._id];
       } else {
-        const exerciseToAdd = allExercises.find(ex => ex._id === exerciseId);
-        if (exerciseToAdd) {
-          newSelected[exerciseId] = exerciseToAdd;
-        }
+        newSelected[exercise._id] = exercise;
       }
       return newSelected;
     });
   };
-
-  const handleDoneSelection = () => {
-    const exercisesToReturn = Object.values(selectedExercises);
-    if (exercisesToReturn.length === 0) {
-      Alert.alert("No Exercises Selected", "Please select at least one exercise.");
-      return;
-    }
-    navigation.navigate('ManualPlanCreator', { preSelectedExercises: exercisesToReturn });
+  
+  const handleDone = () => {
+      const exercisesToAdd = Object.values(selectedExercises);
+      if(exercisesToAdd.length === 0){
+          return;
+      }
+      if(fromScreen === 'ManualPlanCreator'){
+          const baseExercises: BaseExercise[] = exercisesToAdd.map(ex => ({
+              ...ex,
+              description: typeof ex.description === 'string' ? ex.description : ex.description?.short || '',
+          }));
+          navigation.navigate('ManualPlanCreator', { preSelectedExercises: baseExercises });
+      }
   };
+
+  const filteredExercises = useMemo(() => {
+    return exercises.filter(exercise => {
+      const matchesMuscleGroup = filters.muscleGroup === 'All' || exercise.category === filters.muscleGroup;
+      const matchesDifficulty = filters.difficulty === 'All' || exercise.difficulty === filters.difficulty;
+      const matchesEquipment = filters.equipment === 'All' || (exercise.equipmentNeeded && exercise.equipmentNeeded.includes(filters.equipment));
+      const matchesSearch = exercise.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesMuscleGroup && matchesDifficulty && matchesEquipment && matchesSearch;
+    });
+  }, [exercises, filters, searchQuery]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.muscleGroup !== 'All') count++;
+    if (filters.difficulty !== 'All') count++;
+    if (filters.equipment !== 'All') count++;
+    return count;
+  }, [filters]);
+  
+  const selectedCount = Object.keys(selectedExercises).length;
 
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.currentColors.background }]}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={theme.currentColors.primary} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.currentColors.background }]}>
-        <View style={styles.centered}>
-          <Ionicons name="alert-circle-outline" size={48} color={theme.currentColors.error} />
-          <AppText 
-            variant="body1" 
-            style={[styles.errorText, { color: theme.currentColors.error }]}
-          >
-            {error}
-          </AppText>
-          <NeumorphicButton
-            onPress={() => navigation.goBack()}
-            containerStyle={styles.errorButton}
-            neumorphicType="flat"
-            buttonType="secondary"
-          >
-            <AppText variant="button" style={{ color: theme.currentColors.textPrimary }}>
-              Go Back
-            </AppText>
-          </NeumorphicButton>
-        </View>
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator size="large" color="#01D38D" style={{flex: 1}} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.currentColors.background }]}>
-      <View style={styles.screenContainer}>
-        <SectionList
-          sections={exerciseSections}
-          renderItem={({ item }) => (
-            <ExerciseListItem 
-              item={item} 
-              isSelected={!!selectedExercises[item._id]}
-              onToggleSelect={handleToggleSelect}
-            />
-          )}
-          renderSectionHeader={({ section: { title } }) => (
-            <SectionHeader title={title} />
-          )}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.listContent}
-          stickySectionHeadersEnabled={true}
-          showsVerticalScrollIndicator={false}
-        />
-        
-        {Object.keys(selectedExercises).length > 0 && (
-          <View style={[
-            styles.bottomBar,
-            { backgroundColor: theme.currentColors.surface }
-          ]}>
-            <NeumorphicButton
-              onPress={handleDoneSelection}
-              containerStyle={styles.doneButton}
-              neumorphicType="raised"
-              buttonType="primary"
-            >
-              <AppText variant="button" style={{ color: 'white' }}>
-                Add {Object.keys(selectedExercises).length} Exercise{Object.keys(selectedExercises).length > 1 ? 's' : ''}
-              </AppText>
-            </NeumorphicButton>
-          </View>
-        )}
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Select Exercises</Text>
       </View>
+
+      <View style={styles.searchAndFilterContainer}>
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color="#A0A5B1" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search exercises..."
+            placeholderTextColor="#A0A5B1"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+        <TouchableOpacity style={styles.filterButton} onPress={() => setIsFilterModalVisible(true)}>
+          <Ionicons name="options-outline" size={24} color="#FFFFFF" />
+          {activeFilterCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+       
+      {/* Reusing the FilterModal component. We would need to define it in a shared components folder */}
+      {/* For this example, let's assume FilterModal exists */}
+      <FilterModal
+        visible={isFilterModalVisible}
+        onClose={() => setIsFilterModalVisible(false)}
+        applyFilters={setFilters}
+        initialFilters={filters}
+        equipmentList={equipmentList}
+        muscleGroups={MUSCLE_GROUPS}
+        difficulties={DIFFICULTIES}
+      />
+
+      <FlatList
+        data={filteredExercises}
+        renderItem={({ item }) => (
+          <ExercisePickerCard
+            item={item}
+            isSelected={!!selectedExercises[item._id]}
+            onSelect={() => handleToggleSelect(item)}
+          />
+        )}
+        keyExtractor={(item) => item._id}
+        contentContainerStyle={styles.listContentContainer}
+        showsVerticalScrollIndicator={false}
+      />
+      
+      {selectedCount > 0 && (
+        <View style={styles.footer}>
+            <TouchableOpacity style={styles.doneButton} onPress={handleDone}>
+                <Text style={styles.doneButtonText}>Add {selectedCount} Exercise{selectedCount > 1 ? 's' : ''}</Text>
+            </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -350,127 +215,135 @@ const ExercisePickerScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#191E29',
   },
-  screenContainer: {
-    flex: 1,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
   },
-  centered: {
+  backButton: {
+    marginRight: 15,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  searchAndFilterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 10,
+  },
+  searchContainer: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E2328',
+    borderRadius: 15,
+    paddingHorizontal: 15,
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    height: 50,
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+  filterButton: {
+    marginLeft: 10,
+    height: 50,
+    width: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    backgroundColor: '#1E2328',
+    borderRadius: 15,
   },
-  errorText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 16,
+  filterBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#01D38D',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  errorButton: {
-    marginTop: 24,
-    paddingHorizontal: 32,
+  filterBadgeText: {
+    color: '#191E29',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
-  listContent: {
+  listContentContainer: {
+    paddingHorizontal: 20,
     paddingBottom: 100,
   },
-  sectionHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  itemContainer: {
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 12,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  itemContent: {
-    padding: 16,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  itemTitleContainer: {
-    flex: 1,
-    marginRight: 16,
-  },
-  badgesContainer: {
-    flexDirection: 'row',
-    marginTop: 4,
-  },
-  badge: {
+  card: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
+    backgroundColor: '#1E2328',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 15,
   },
-  badgeText: {
-    marginLeft: 4,
+  cardImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 10,
+    marginRight: 15,
   },
-  description: {
-    marginTop: 8,
+  cardContent: {
+    flex: 1,
   },
-  muscleGroupsContainer: {
-    marginTop: 12,
+  cardTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
   },
-  muscleGroupsContent: {
-    paddingRight: 16,
+  cardSubtitle: {
+    color: '#A0A5B1',
+    fontSize: 14,
+    marginTop: 4,
   },
-  muscleTag: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginRight: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.1)',
-  },
-  checkboxContainer: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  checkbox: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 2,
+    borderColor: '#696E79',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  bottomBar: {
+  checkboxSelected: {
+    backgroundColor: '#01D38D',
+    borderColor: '#01D38D',
+  },
+  footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(0,0,0,0.1)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    padding: 20,
+    paddingBottom: 30,
+    backgroundColor: '#191E29',
+    borderTopWidth: 1,
+    borderTopColor: '#2A2D32'
   },
   doneButton: {
-    paddingVertical: 12,
+    backgroundColor: '#01D38D',
+    padding: 18,
+    borderRadius: 30,
+    alignItems: 'center',
+  },
+  doneButtonText: {
+    color: '#191E29',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
 

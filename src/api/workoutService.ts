@@ -31,6 +31,7 @@ export interface Workout {
   difficulty: string;
   durationEstimateMinutes: number;
   exercises: ExerciseDetail[];
+  imageUrl?: string;
   // Add any other fields like imageUrl, tags etc.
 }
 

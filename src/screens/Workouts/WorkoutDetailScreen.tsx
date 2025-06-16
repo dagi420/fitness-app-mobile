@@ -1,321 +1,120 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   ScrollView,
   StyleSheet,
-  ActivityIndicator,
   TouchableOpacity,
-  Image,
-  Platform,
-  Dimensions,
-  Alert,
+  Text,
+  ImageBackground,
+  StatusBar,
 } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { WorkoutsStackParamList } from '../../navigation/types';
-import { DisplayableWorkoutPlan } from './WorkoutListScreen';
 import { PlannedExercise } from '../Planner/ManualPlanCreatorScreen';
-import { useAuth } from '../../store/AuthContext';
-import { useAppTheme } from '../../styles/useAppTheme';
-import { AppText } from '../../components/AppText';
-import { NeumorphicButton } from '../../components/NeumorphicButton';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { UserWorkoutPlan } from '../../api/planService';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type WorkoutDetailScreenRouteProp = RouteProp<WorkoutsStackParamList, 'WorkoutDetail'>;
 type WorkoutDetailScreenNavigationProp = StackNavigationProp<WorkoutsStackParamList, 'WorkoutDetail'>;
 
-interface WorkoutDetailScreenProps {
-  route: WorkoutDetailScreenRouteProp;
-}
-
-interface ScreenExerciseDetail {
-  exerciseName: string;
-  sets?: string | number;
-  reps?: string;
-  durationSeconds?: number;
-  description?: string;
-  equipment?: string;
-  difficulty?: string;
-  muscleGroups?: string[];
-  videoUrl?: string;
-  type?: string;
-}
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const ExerciseCard: React.FC<{ 
-  exercise: PlannedExercise; 
-  index: number;
-  onPress: () => void;
-}> = ({ exercise, index, onPress }) => {
-  const theme = useAppTheme();
-  
+const ExerciseCard: React.FC<{ exercise: PlannedExercise; index: number }> = ({
+  exercise,
+  index,
+}) => {
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[
-        styles.exerciseCard,
-        { backgroundColor: theme.currentColors.surface }
-      ]}
-    >
-      <View style={styles.exerciseCardContent}>
-        <View style={styles.exerciseNumberBadge}>
-          <AppText variant="h3" style={{ color: theme.currentColors.primary }}>
-            {(index + 1).toString().padStart(2, '0')}
-          </AppText>
-        </View>
-        
-        <View style={styles.exerciseMainInfo}>
-          <AppText variant="h3" style={{ color: theme.currentColors.textPrimary }}>
-            {exercise.name}
-          </AppText>
-          
-          <View style={styles.exerciseMetaRow}>
-            {exercise.type && (
-              <View style={[styles.badge, { backgroundColor: theme.currentColors.primary + '20' }]}>
-                <AppText variant="caption" style={{ color: theme.currentColors.primary }}>
-                  {exercise.type}
-                </AppText>
-              </View>
-            )}
-            {exercise.difficulty && (
-              <View style={[styles.badge, { backgroundColor: theme.currentColors.secondary + '20' }]}>
-                <AppText variant="caption" style={{ color: theme.currentColors.secondary }}>
-                  {exercise.difficulty}
-                </AppText>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.exerciseStats}>
-            {exercise.sets && (
-              <View style={styles.statItem}>
-                <Ionicons name="repeat" size={16} color={theme.currentColors.textSecondary} />
-                <AppText variant="caption" style={{ color: theme.currentColors.textSecondary }}>
-                  {exercise.sets} sets
-                </AppText>
-              </View>
-            )}
-            {exercise.reps && (
-              <View style={styles.statItem}>
-                <Ionicons name="fitness" size={16} color={theme.currentColors.textSecondary} />
-                <AppText variant="caption" style={{ color: theme.currentColors.textSecondary }}>
-                  {exercise.reps}
-                </AppText>
-              </View>
-            )}
-          </View>
-        </View>
-
-        <Ionicons 
-          name="chevron-forward" 
-          size={24} 
-          color={theme.currentColors.textSecondary}
-          style={styles.exerciseCardArrow}
-        />
+    <View style={styles.exerciseCard}>
+      <View style={styles.exerciseNumberContainer}>
+        <Text style={styles.exerciseNumber}>{String(index + 1).padStart(2, '0')}</Text>
       </View>
-
-      {exercise.targetMuscleGroups && exercise.targetMuscleGroups.length > 0 && (
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.muscleGroupsScroll}
-        >
-          {exercise.targetMuscleGroups.map((muscle, idx) => (
-            <View 
-              key={idx} 
-              style={[
-                styles.muscleGroupTag,
-                { backgroundColor: theme.currentColors.accent + '15' }
-              ]}
-            >
-              <AppText 
-                variant="caption" 
-                style={{ color: theme.currentColors.accent }}
-              >
-                {muscle}
-              </AppText>
-            </View>
-          ))}
-        </ScrollView>
-      )}
-    </TouchableOpacity>
+      <View style={styles.exerciseInfo}>
+        <Text style={styles.exerciseName} numberOfLines={1}>
+          {exercise.name}
+        </Text>
+        <Text style={styles.exerciseMeta}>
+          {exercise.sets} sets x {exercise.reps} reps
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={24} color="#696E79" />
+    </View>
   );
 };
 
-const WorkoutDetailScreen: React.FC<WorkoutDetailScreenProps> = ({ route }) => {
+const WorkoutDetailScreen = () => {
   const navigation = useNavigation<WorkoutDetailScreenNavigationProp>();
-  const { token } = useAuth();
-  const theme = useAppTheme();
+  const route = useRoute<WorkoutDetailScreenRouteProp>();
+  const insets = useSafeAreaInsets();
 
-  const planObjectFromParams = useMemo(() => route.params.workout, [route.params.workout]);
-  const [currentPlan, setCurrentPlan] = useState<DisplayableWorkoutPlan | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        if (planObjectFromParams) {
-          setCurrentPlan(planObjectFromParams);
-        } else {
-          setError('Workout details not provided.');
-          setCurrentPlan(null);
-        }
-      } catch (err) {
-        console.error("Error loading workout details:", err);
-        setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-        setCurrentPlan(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
-  }, [planObjectFromParams]);
-
-  const handleRetry = () => {
-    setIsLoading(true);
-    setError(null);
-    setCurrentPlan(null);
-  };
-
-  const handleExercisePress = (exercise: PlannedExercise) => {
-    const exerciseForDetail = {
-      ...exercise,
-      targetMuscleGroups: exercise.targetMuscleGroups || [],
-      equipmentNeeded: exercise.equipmentNeeded || [],
-      muscleGroups: exercise.targetMuscleGroups || [],
-      equipment: exercise.equipment || exercise.equipmentNeeded?.join(', ') || '',
-      description: {
-        short: exercise.description || '',
-        full: exercise.description || '',
-        benefits: [],
-        commonMistakes: []
-      },
-      instructions: exercise.instructions || []
-    };
-    navigation.navigate('ExerciseDetail', { exercise: exerciseForDetail });
-  };
+  const workout = useMemo(() => route.params.workout, [route.params.workout]);
 
   const handleStartWorkout = () => {
-    if (!currentPlan) return;
-    
-    const workoutPlan = {
-      ...currentPlan,
-      userId: '',
-      isAIgenerated: currentPlan.isAIGenerated || false
+    if (!workout) return;
+    const planForActiveWorkout: UserWorkoutPlan = {
+      _id: workout._id,
+      planName: workout.planName,
+      exercises: workout.exercises,
+      userId: '', // This should be handled by the auth context where needed, not here
+      isAIgenerated: workout.isAIGenerated || false,
+      createdAt: workout.createdAt || new Date().toISOString(),
+      updatedAt: workout.updatedAt || new Date().toISOString(),
+      durationEstimateMinutes: workout.durationEstimateMinutes,
+      caloriesBurned: workout.caloriesBurned,
+      description: workout.description,
+      type: workout.type,
+      difficulty: workout.difficulty,
     };
-    
-    navigation.navigate('ActiveWorkout', { plan: workoutPlan });
+    navigation.navigate('ActiveWorkout', { plan: planForActiveWorkout });
   };
 
-  if (isLoading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: theme.currentColors.background }]}>
-        <ActivityIndicator size="large" color={theme.currentColors.primary} />
-      </View>
-    );
-  }
-
-  if (error || !currentPlan) {
-    return (
-      <View style={[styles.centered, { backgroundColor: theme.currentColors.background }]}>
-        <Ionicons name="alert-circle-outline" size={48} color={theme.currentColors.error} />
-        <AppText 
-          variant="h2" 
-          style={[styles.errorText, { color: theme.currentColors.error }]}
-        >
-          {error || 'Workout not found'}
-        </AppText>
-        <NeumorphicButton
-          onPress={handleRetry}
-          buttonType="secondary"
-          neumorphicType="flat"
-        >
-          <AppText variant="button">Try Again</AppText>
-        </NeumorphicButton>
-      </View>
-    );
-  }
+  const defaultImage =
+    'https://images.unsplash.com/photo-1554344728-77cf90d922a2?fit=crop&w=1200&q=80';
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.currentColors.background }]}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Workout Header */}
-        <View style={styles.header}>
-          <AppText variant="h1" style={{ color: theme.currentColors.textPrimary }}>
-            {currentPlan.planName}
-          </AppText>
-          
-          <View style={styles.metadataContainer}>
-            <View style={styles.metadataItem}>
-              <Ionicons name="time-outline" size={20} color={theme.currentColors.primary} />
-              <AppText variant="body2" style={{ color: theme.currentColors.textSecondary }}>
-                {currentPlan.durationEstimateMinutes || '30'} mins
-              </AppText>
-            </View>
-            
-            <View style={styles.metadataItem}>
-              <Ionicons name="barbell-outline" size={20} color={theme.currentColors.primary} />
-              <AppText variant="body2" style={{ color: theme.currentColors.textSecondary }}>
-                {currentPlan.exercises?.length || 0} exercises
-              </AppText>
-            </View>
-
-            {currentPlan.difficulty && (
-              <View style={styles.metadataItem}>
-                <Ionicons name="speedometer-outline" size={20} color={theme.currentColors.primary} />
-                <AppText variant="body2" style={{ color: theme.currentColors.textSecondary }}>
-                  {currentPlan.difficulty}
-                </AppText>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <ImageBackground
+          source={{ uri: workout.imageUrl || defaultImage }}
+          style={[styles.header, { paddingTop: insets.top }]}
+        >
+          <View style={styles.headerOverlay}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
+            </TouchableOpacity>
+            <View style={styles.headerContent}>
+              <Text style={styles.planTitle}>{workout.planName}</Text>
+              <View style={styles.metaContainer}>
+                <View style={styles.metaItem}>
+                  <Ionicons name="time-outline" size={16} color="#FFFFFF" />
+                  <Text style={styles.metaText}>{workout.durationEstimateMinutes || 'N/A'} mins</Text>
+                </View>
+                <View style={styles.metaItem}>
+                  <Ionicons name="body-outline" size={16} color="#FFFFFF" />
+                  <Text style={styles.metaText}>{workout.exercises.length} exercises</Text>
+                </View>
+                <View style={styles.metaItem}>
+                  <Ionicons name="flame-outline" size={16} color="#FFFFFF" />
+                  <Text style={styles.metaText}>{workout.difficulty || 'N/A'}</Text>
+                </View>
               </View>
-            )}
+            </View>
           </View>
+        </ImageBackground>
 
-          {currentPlan.description && (
-            <AppText 
-              variant="body1" 
-              style={[styles.description, { color: theme.currentColors.textSecondary }]}
-            >
-              {currentPlan.description}
-            </AppText>
-          )}
-        </View>
-
-        {/* Exercises Section */}
-        <View style={styles.exercisesSection}>
-          <AppText variant="h2" style={[styles.sectionTitle, { color: theme.currentColors.textPrimary }]}>
-            Workout Plan
-          </AppText>
-          
-          {currentPlan.exercises?.map((exercise, index) => (
-            <ExerciseCard
-              key={`${exercise._id}-${index}`}
-              exercise={exercise}
-              index={index}
-              onPress={() => handleExercisePress(exercise)}
-            />
+        <View style={styles.contentContainer}>
+          <Text style={styles.sectionTitle}>Exercises</Text>
+          {workout.exercises.map((exercise, index) => (
+            <ExerciseCard key={exercise._id || index} exercise={exercise} index={index} />
           ))}
         </View>
       </ScrollView>
 
-      {/* Start Workout Button */}
-      <View style={[styles.bottomBar, { backgroundColor: theme.currentColors.background }]}>
-        <NeumorphicButton
-          onPress={handleStartWorkout}
-          buttonType="primary"
-          neumorphicType="raised"
-          containerStyle={styles.startButton}
-        >
-          <Ionicons name="play" size={24} color="white" style={{ marginRight: 8 }} />
-          <AppText variant="button" style={{ color: 'white' }}>
-            Start Workout
-          </AppText>
-        </NeumorphicButton>
+      <View style={[styles.footer, { paddingBottom: insets.bottom || 20 }]}>
+        <TouchableOpacity style={styles.startButton} onPress={handleStartWorkout}>
+          <Text style={styles.startButtonText}>Start Workout</Text>
+          <Ionicons name="play-circle" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -324,113 +123,113 @@ const WorkoutDetailScreen: React.FC<WorkoutDetailScreenProps> = ({ route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorText: {
-    textAlign: 'center',
-    marginVertical: 20,
+    backgroundColor: '#191E29',
   },
   header: {
-    padding: 20,
+    height: 300,
+    justifyContent: 'flex-end',
   },
-  metadataContainer: {
+  headerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'space-between',
+    padding: 25,
+  },
+  backButton: {
+    position: 'absolute',
+    top: 50, // Adjust as needed based on safe area
+    left: 25,
+    zIndex: 10,
+  },
+  headerContent: {
+    alignSelf: 'flex-end',
+    width: '100%',
+  },
+  planTitle: {
+    fontSize: 34,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 15,
+  },
+  metaContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 16,
-    gap: 16,
+    gap: 20,
   },
-  metadataItem: {
+  metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
   },
-  description: {
-    marginTop: 16,
-    lineHeight: 24,
+  metaText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    marginLeft: 8,
   },
-  exercisesSection: {
-    padding: 20,
+  contentContainer: {
+    padding: 25,
   },
   sectionTitle: {
-    marginBottom: 16,
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 20,
   },
   exerciseCard: {
-    borderRadius: 16,
-    marginBottom: 16,
-    padding: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  exerciseCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#1E2328',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 15,
   },
-  exerciseNumberBadge: {
+  exerciseNumberContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: 'rgba(1, 211, 141, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 15,
   },
-  exerciseMainInfo: {
+  exerciseNumber: {
+    color: '#01D38D',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  exerciseInfo: {
     flex: 1,
   },
-  exerciseMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    gap: 8,
+  exerciseName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+  exerciseMeta: {
+    fontSize: 14,
+    color: '#A0A5B1',
+    marginTop: 4,
   },
-  exerciseStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    gap: 16,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  exerciseCardArrow: {
-    marginLeft: 8,
-  },
-  muscleGroupsScroll: {
-    marginTop: 12,
-  },
-  muscleGroupTag: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginRight: 8,
-  },
-  bottomBar: {
-    padding: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
+  footer: {
+    paddingHorizontal: 25,
+    paddingTop: 10,
+    backgroundColor: '#191E29', // To ensure it blends
   },
   startButton: {
+    backgroundColor: '#01D38D',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 18,
+    borderRadius: 30,
+  },
+  startButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginRight: 10,
   },
 });
 

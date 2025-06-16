@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,21 +7,70 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
-  Image,
+  SafeAreaView,
+  StatusBar
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../../store/AuthContext';
 import { fetchUserProgressLogs, ProgressLog } from '../../api/progressService';
 import { LineChart } from 'react-native-chart-kit';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/types';
 import { Calendar, DateData } from 'react-native-calendars';
-import { API_BASE_URL } from '../../api/apiConfig';
 
 type ProgressScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Progress'>;
 
 const { width } = Dimensions.get('window');
+
+const chartConfig = {
+  backgroundColor: '#1E2328',
+  backgroundGradientFrom: '#1E2328',
+  backgroundGradientTo: '#1E2328',
+  decimalPlaces: 1,
+  color: (opacity = 1) => `rgba(1, 211, 141, ${opacity})`, // #01D38D
+  labelColor: (opacity = 1) => `rgba(160, 165, 177, ${opacity})`, // #A0A5B1
+  style: {
+    borderRadius: 16,
+  },
+  propsForDots: {
+    r: '6',
+    strokeWidth: '2',
+    stroke: '#01D38D',
+  },
+};
+
+const calendarTheme = {
+  backgroundColor: '#1E2328',
+  calendarBackground: '#1E2328',
+  textSectionTitleColor: '#A0A5B1',
+  textSectionTitleDisabledColor: '#696E79',
+  selectedDayBackgroundColor: '#01D38D',
+  selectedDayTextColor: '#191E29',
+  todayTextColor: '#01D38D',
+  dayTextColor: '#FFFFFF',
+  textDisabledColor: '#696E79',
+  dotColor: '#01D38D',
+  selectedDotColor: '#191E29',
+  arrowColor: '#01D38D',
+  disabledArrowColor: '#696E79',
+  monthTextColor: '#FFFFFF',
+  indicatorColor: '#01D38D',
+  textDayFontWeight: '300' as const,
+  textMonthFontWeight: 'bold' as const,
+  textDayHeaderFontWeight: '500' as const,
+  textDayFontSize: 16,
+  textMonthFontSize: 20,
+  textDayHeaderFontSize: 14,
+  'stylesheet.calendar.header': {
+    week: {
+      marginTop: 5,
+      flexDirection: 'row',
+      justifyContent: 'space-between'
+    }
+  }
+};
+
 
 const ProgressScreen = () => {
   const navigation = useNavigation<ProgressScreenNavigationProp>();
@@ -29,17 +78,14 @@ const ProgressScreen = () => {
   const [logs, setLogs] = useState<ProgressLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [selectedLog, setSelectedLog] = useState<ProgressLog | null>(null);
-  const serverRoot = API_BASE_URL.replace('/api', '');
 
   const loadLogs = useCallback(async () => {
     if (!user || !token) return;
-    
     try {
       const response = await fetchUserProgressLogs(token, user._id);
       if (response.success && response.logs) {
         const sortedLogs = response.logs
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         setLogs(sortedLogs);
       }
     } catch (error) {
@@ -51,470 +97,358 @@ const ProgressScreen = () => {
 
   useFocusEffect(
     useCallback(() => {
+      setIsLoading(true);
       loadLogs();
     }, [loadLogs])
   );
+  
+  const selectedLog = useMemo(() => {
+    if (!selectedDate) return null;
+    return logs.find(l => l.date.startsWith(selectedDate)) || null;
+  }, [logs, selectedDate]);
 
-  const getWeightData = () => {
-    const data = logs
-      .slice(0, 7)
-      .reverse()
-      .map(log => log.weightKg);
+  const weightData = useMemo(() => {
+    const last30DaysLogs = logs.slice(-30);
+    if (last30DaysLogs.length < 2) return null;
     return {
-      labels: Array(data.length).fill(''),
-      datasets: [{ data }],
+      labels: last30DaysLogs.map(log => {
+        const d = new Date(log.date);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+      }),
+      datasets: [{ data: last30DaysLogs.map(log => log.weightKg) }],
     };
-  };
+  }, [logs]);
 
-  const getLatestStats = () => {
+  const latestStats = useMemo(() => {
     if (logs.length === 0) return null;
-    const latest = logs[0];
-    const previous = logs[1];
+    const latest = logs[logs.length-1];
+    const previous = logs.length > 1 ? logs[logs.length-2] : null;
     
-    const weightDiff = previous 
-      ? (latest.weightKg - previous.weightKg).toFixed(1)
-      : '0';
-    
+    const weightDiff = previous ? (latest.weightKg - previous.weightKg) : 0;
     const bodyFatDiff = (previous && latest.bodyFatPercentage && previous.bodyFatPercentage)
-      ? (latest.bodyFatPercentage - previous.bodyFatPercentage).toFixed(1)
+      ? (latest.bodyFatPercentage - previous.bodyFatPercentage)
       : null;
 
     return { latest, weightDiff, bodyFatDiff };
-  };
+  }, [logs]);
 
-  const getMarkedDates = () => {
-    const markedDates: any = {};
+  const markedDates = useMemo(() => {
+    const marks: any = {};
     logs.forEach(log => {
       const dateStr = log.date.split('T')[0];
-      const hasPhotos = log.photoUrls && log.photoUrls.length > 0;
-      
-      markedDates[dateStr] = {
+      marks[dateStr] = {
         marked: true,
-        dotColor: hasPhotos ? '#34C759' : '#007AFF',
-        selected: dateStr === selectedDate,
-        selectedColor: '#007AFF',
+        dotColor: '#01D38D',
       };
     });
-    return markedDates;
-  };
+    if (selectedDate) {
+        marks[selectedDate] = {
+            ...marks[selectedDate],
+            selected: true,
+            selectedColor: '#01D38D',
+            selectedTextColor: '#191E29',
+        }
+    }
+    return marks;
+  }, [logs, selectedDate]);
 
-  const handleDayPress = (day: DateData) => {
-    const dateStr = day.dateString;
-    const log = logs.find(l => l.date.startsWith(dateStr));
-    
-    setSelectedDate(dateStr);
-    setSelectedLog(log || null);
-  };
-
-  const renderQuickStats = () => {
-    const stats = getLatestStats();
-    if (!stats) return null;
-
-    return (
-      <View style={styles.quickStatsContainer}>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Current Weight</Text>
-          <Text style={styles.statValue}>{stats.latest.weightKg} kg</Text>
-          <Text style={[styles.statChange, 
-            parseFloat(stats.weightDiff) < 0 
-              ? styles.decreaseText 
-              : parseFloat(stats.weightDiff) > 0 
-                ? styles.increaseText 
-                : styles.neutralText
-          ]}>
-            {parseFloat(stats.weightDiff) > 0 ? '+' : ''}{stats.weightDiff} kg
-          </Text>
-        </View>
-
-        {stats.latest.bodyFatPercentage && (
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Body Fat</Text>
-            <Text style={styles.statValue}>{stats.latest.bodyFatPercentage}%</Text>
-            {stats.bodyFatDiff && (
-              <Text style={[styles.statChange,
-                parseFloat(stats.bodyFatDiff) < 0 
-                  ? styles.decreaseText 
-                  : parseFloat(stats.bodyFatDiff) > 0 
-                    ? styles.increaseText 
-                    : styles.neutralText
-              ]}>
-                {parseFloat(stats.bodyFatDiff) > 0 ? '+' : ''}{stats.bodyFatDiff}%
-              </Text>
-            )}
-          </View>
-        )}
-      </View>
-    );
-  };
-
-  const renderCalendarCard = () => (
-    <View style={styles.calendarCard}>
-      <View style={styles.calendarHeader}>
-        <Text style={styles.calendarTitle}>Progress Calendar</Text>
-        <View style={styles.legendContainer}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#007AFF' }]} />
-            <Text style={styles.legendText}>Log</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#34C759' }]} />
-            <Text style={styles.legendText}>Photos</Text>
-          </View>
-        </View>
-      </View>
-      
-      <Calendar
-        onDayPress={handleDayPress}
-        markedDates={getMarkedDates()}
-        theme={{
-          backgroundColor: '#ffffff',
-          calendarBackground: '#ffffff',
-          selectedDayBackgroundColor: '#007AFF',
-          selectedDayTextColor: '#ffffff',
-          todayTextColor: '#007AFF',
-          dayTextColor: '#2c2c2c',
-          textDisabledColor: '#d9e1e8',
-          dotColor: '#007AFF',
-          selectedDotColor: '#ffffff',
-          arrowColor: '#007AFF',
-          monthTextColor: '#2d4150',
-          textDayFontWeight: '300',
-          textMonthFontWeight: 'bold',
-          textDayHeaderFontWeight: '500',
-          textDayFontSize: 16,
-          textMonthFontSize: 16,
-          textDayHeaderFontSize: 14,
-        }}
-      />
-
-      {selectedLog && (
-        <View style={styles.selectedLogContainer}>
-          <Text style={styles.selectedLogDate}>
-            {new Date(selectedLog.date).toLocaleDateString()}
-          </Text>
-          <View style={styles.selectedLogDetails}>
-            <View style={styles.logDetailItem}>
-              <Icon name="scale" size={20} color="#007AFF" />
-              <Text style={styles.logDetailText}>{selectedLog.weightKg} kg</Text>
-            </View>
-            {selectedLog.bodyFatPercentage && (
-              <View style={styles.logDetailItem}>
-                <Icon name="percent" size={20} color="#007AFF" />
-                <Text style={styles.logDetailText}>{selectedLog.bodyFatPercentage}% body fat</Text>
-              </View>
-            )}
-            {selectedLog.photoUrls && selectedLog.photoUrls.length > 0 && (
-              <TouchableOpacity 
-                style={styles.viewPhotosButton}
-                onPress={() => navigation.navigate('PhotoViewer', { 
-                  photoUrls: selectedLog.photoUrls || [],
-                  logDate: selectedLog.date
-                })}
-              >
-                <Icon name="image-multiple" size={20} color="#ffffff" />
-                <Text style={styles.viewPhotosText}>View Photos</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      )}
-    </View>
-  );
-
-  const renderActionButtons = () => {
-    const allPhotoUrls = logs
-      .flatMap(log => log.photoUrls || [])
-      .filter(url => !!url);
-
-    return (
-      <View style={styles.actionButtonsContainer}>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('ProgressLogEntry', {})}
-        >
-          <Icon name="plus-circle-outline" size={24} color="#007AFF" />
-          <Text style={styles.actionButtonText}>New Log</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('ProgressHistory')}
-        >
-          <Icon name="history" size={24} color="#007AFF" />
-          <Text style={styles.actionButtonText}>History</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('PhotoViewer', { photoUrls: allPhotoUrls })}
-        >
-          <Icon name="image-multiple" size={24} color="#007AFF" />
-          <Text style={styles.actionButtonText}>Photos</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  };
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#01D38D" />
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>My Progress</Text>
-      
-      {renderQuickStats()}
-      {renderActionButtons()}
-      {renderCalendarCard()}
-
-      {logs.length > 0 && (
-        <View style={styles.chartContainer}>
-          <Text style={styles.sectionTitle}>Weight Trend</Text>
-          <LineChart
-            data={getWeightData()}
-            width={width - 32}
-            height={220}
-            chartConfig={{
-              backgroundColor: '#ffffff',
-              backgroundGradientFrom: '#ffffff',
-              backgroundGradientTo: '#ffffff',
-              decimalPlaces: 1,
-              color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-              style: {
-                borderRadius: 16,
-              },
-            }}
-            bezier
-            style={styles.chart}
-          />
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+            <Text style={styles.title}>My Progress</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('ProgressHistory')}>
+                <Ionicons name="time-outline" size={28} color="#FFFFFF" />
+            </TouchableOpacity>
         </View>
-      )}
 
-      {logs.length === 0 && (
-        <View style={styles.emptyStateContainer}>
-          <Icon name="scale-bathroom" size={64} color="#ccc" />
-          <Text style={styles.emptyStateText}>No progress logs yet</Text>
-          <Text style={styles.emptyStateSubText}>
-            Start tracking your fitness journey by adding your first log!
-          </Text>
-        </View>
-      )}
-    </ScrollView>
+        {logs.length === 0 ? (
+          <View style={styles.emptyStateContainer}>
+            <Ionicons name="analytics-outline" size={80} color="#2A2D32" />
+            <Text style={styles.emptyStateText}>No Progress Yet</Text>
+            <Text style={styles.emptyStateSubText}>
+              Tap the button below to add your first progress log and start your journey.
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.quickStatsContainer}>
+                <StatCard 
+                    icon="barbell-outline"
+                    label="Weight"
+                    value={`${latestStats?.latest.weightKg || '--'} kg`}
+                    change={latestStats?.weightDiff}
+                    unit="kg"
+                    positiveIsBad={true}
+                />
+                 <StatCard 
+                    icon="body-outline"
+                    label="Body Fat"
+                    value={`${latestStats?.latest.bodyFatPercentage || '--'}%`}
+                    change={latestStats?.bodyFatDiff}
+                    unit="%"
+                    positiveIsBad={true}
+                />
+            </View>
+
+            {weightData && (
+                <View style={styles.card}>
+                    <Text style={styles.cardTitle}>Weight Trend</Text>
+                    <LineChart
+                        data={weightData}
+                        width={width - 74} // container padding + card padding
+                        height={220}
+                        chartConfig={chartConfig}
+                        bezier
+                        style={styles.chart}
+                        withHorizontalLines={false}
+                        withVerticalLines={false}
+                    />
+                </View>
+            )}
+
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Progress Calendar</Text>
+              <Calendar
+                onDayPress={(day: DateData) => setSelectedDate(day.dateString)}
+                markedDates={markedDates}
+                theme={calendarTheme}
+              />
+              {selectedLog && (
+                <View style={styles.selectedLogContainer}>
+                  <Text style={styles.selectedLogDate}>
+                    {new Date(selectedLog.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  </Text>
+                  <View style={styles.selectedLogDetails}>
+                    <View style={styles.logDetailItem}>
+                      <Ionicons name="scale-outline" size={20} color="#01D38D" />
+                      <Text style={styles.logDetailText}>{selectedLog.weightKg} kg</Text>
+                    </View>
+                    {selectedLog.bodyFatPercentage && (
+                      <View style={styles.logDetailItem}>
+                        <Ionicons name="body-outline" size={20} color="#01D38D" />
+                        <Text style={styles.logDetailText}>{selectedLog.bodyFatPercentage}% body fat</Text>
+                      </View>
+                    )}
+                    {selectedLog.photoUrls && selectedLog.photoUrls.length > 0 && (
+                      <TouchableOpacity 
+                        style={styles.viewPhotosButton}
+                        onPress={() => navigation.navigate('PhotoViewer', { 
+                          photoUrls: selectedLog.photoUrls || [],
+                          logDate: selectedLog.date
+                        })}
+                      >
+                        <Ionicons name="images-outline" size={20} color="#191E29" />
+                        <Text style={styles.viewPhotosText}>View Photos</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              )}
+            </View>
+          </>
+        )}
+      </ScrollView>
+      <TouchableOpacity 
+        style={styles.fab}
+        onPress={() => navigation.navigate('ProgressLogEntry', {})}
+      >
+        <Ionicons name="add" size={32} color="#191E29" />
+      </TouchableOpacity>
+    </SafeAreaView>
   );
+};
+
+const StatCard = ({icon, label, value, change, unit, positiveIsBad }) => {
+    const isPositive = change > 0;
+    const isNegative = change < 0;
+    const changeText = change ? `${isPositive ? '+' : ''}${change.toFixed(1)} ${unit}` : `-`;
+    
+    let changeColor = '#A0A5B1'; // Neutral
+    if (isPositive) changeColor = positiveIsBad ? '#FF6B6B' : '#01D38D';
+    if (isNegative) changeColor = positiveIsBad ? '#01D38D' : '#FF6B6B';
+    
+    return (
+        <View style={styles.statCard}>
+            <View style={styles.statIconContainer}>
+                <Ionicons name={icon} size={24} color="#01D38D" />
+            </View>
+            <View>
+                <Text style={styles.statLabel}>{label}</Text>
+                <Text style={styles.statValue}>{value}</Text>
+                <Text style={[styles.statChange, { color: changeColor }]}>
+                    {change ? changeText : 'No change'}
+                </Text>
+            </View>
+        </View>
+    );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f4f4f8',
+    backgroundColor: '#191E29',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#191E29',
+  },
+  header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 25,
+      paddingTop: 20,
+      paddingBottom: 10,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginVertical: 20,
-    marginHorizontal: 16,
+    color: '#FFFFFF',
+  },
+  card: {
+    backgroundColor: '#1E2328',
+    borderRadius: 20,
+    padding: 20,
+    marginHorizontal: 25,
+    marginBottom: 20,
+  },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 15,
   },
   quickStatsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 25,
     marginBottom: 20,
+    gap: 15
   },
   statCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
     flex: 1,
-    marginHorizontal: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E2328',
+    borderRadius: 20,
+    padding: 20,
+  },
+  statIconContainer: {
+    backgroundColor: '#01D38D20',
+    borderRadius: 15,
+    padding: 12,
+    marginRight: 15,
   },
   statLabel: {
     fontSize: 14,
-    color: '#666',
+    color: '#A0A5B1',
     marginBottom: 4,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   statChange: {
     fontSize: 14,
-    fontWeight: '500',
-  },
-  decreaseText: {
-    color: '#34C759',
-  },
-  increaseText: {
-    color: '#FF3B30',
-  },
-  neutralText: {
-    color: '#8E8E93',
-  },
-  actionButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 16,
-    backgroundColor: '#ffffff',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  actionButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionButtonText: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#007AFF',
-  },
-  calendarCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  calendarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  calendarTitle: {
-    fontSize: 18,
     fontWeight: '600',
-    color: '#1a1a1a',
   },
-  legendContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 16,
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 4,
-  },
-  legendText: {
-    fontSize: 12,
-    color: '#666',
+  chart: {
+    borderRadius: 16,
   },
   selectedLogContainer: {
-    marginTop: 16,
-    paddingTop: 16,
+    marginTop: 20,
+    paddingTop: 20,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: '#2A2D32',
   },
   selectedLogDate: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 8,
+    color: '#FFFFFF',
+    marginBottom: 15,
   },
   selectedLogDetails: {
-    gap: 8,
+    gap: 12,
   },
   logDetailItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   logDetailText: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 16,
+    color: '#E0E0E0',
   },
   viewPhotosButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#007AFF',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
+    backgroundColor: '#01D38D',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 25,
     alignSelf: 'flex-start',
-    marginTop: 8,
-    gap: 6,
+    marginTop: 10,
+    gap: 8,
   },
   viewPhotosText: {
-    color: '#ffffff',
+    color: '#191E29',
     fontSize: 14,
-    fontWeight: '500',
-  },
-  chartContainer: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 16,
-  },
-  chart: {
-    borderRadius: 12,
-    marginVertical: 8,
+    fontWeight: 'bold',
   },
   emptyStateContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
-    backgroundColor: '#ffffff',
-    margin: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    padding: 40,
+    marginHorizontal: 25,
+    marginTop: 50,
   },
   emptyStateText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginTop: 16,
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginTop: 20,
+    textAlign: 'center'
   },
   emptyStateSubText: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 16,
+    color: '#A0A5B1',
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 10,
+    lineHeight: 24,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 30,
+    right: 30,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#01D38D',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#01D38D',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.4,
+    shadowRadius: 5,
+    elevation: 8,
   },
 });
 

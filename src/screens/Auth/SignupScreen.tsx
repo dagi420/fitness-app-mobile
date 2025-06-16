@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, StatusBar } from 'react-native';
 import { NavigationProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/types';
 import { registerUser } from '../../api/authService'; // Import the service
+import { LinearGradient } from 'expo-linear-gradient';
 
 type SignupScreenNavigationProp = NavigationProp<RootStackParamList, 'Signup'>;
 
@@ -48,94 +49,137 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Sign Up</Text>
-      <TextInput 
-        style={styles.input} 
-        placeholder="Full Name" 
-        value={fullName} 
-        onChangeText={setFullName} 
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        keyboardType="email-address"
-        autoCapitalize="none"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Confirm Password"
-        secureTextEntry
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-      />
-      <TouchableOpacity 
-        style={[styles.button, isLoading && styles.buttonDisabled]}
-        onPress={handleSignup}
-        disabled={isLoading}
-      >
-        <Text style={styles.buttonText}>{isLoading ? 'Registering...' : 'Sign Up'}</Text>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-        <Text style={styles.linkText}>Already have an account? Login</Text>
-      </TouchableOpacity>
-    </View>
+    <LinearGradient
+      colors={['#191E29', '#132D46']}
+      style={styles.container}
+    >
+      <StatusBar barStyle="light-content" backgroundColor="#191E29" />
+      
+      <View style={styles.content}>
+        <Text style={styles.title}>Create Account</Text>
+        <Text style={styles.subtitle}>Join us and start your fitness journey</Text>
+        
+        <View style={styles.formContainer}>
+          <TextInput 
+            style={styles.input} 
+            placeholder="Full Name"
+            placeholderTextColor="#696E79"
+            value={fullName} 
+            onChangeText={setFullName} 
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor="#696E79"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor="#696E79"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Confirm Password"
+            placeholderTextColor="#696E79"
+            secureTextEntry
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+          />
+          
+          <TouchableOpacity 
+            style={[styles.button, isLoading && styles.buttonDisabled]}
+            onPress={handleSignup}
+            disabled={isLoading}
+          >
+            <Text style={styles.buttonText}>{isLoading ? 'Creating Account...' : 'Sign Up'}</Text>
+          </TouchableOpacity>
+        </View>
+        
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Already have an account? </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+            <Text style={styles.linkText}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  content: {
+    flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 32,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    marginBottom: 30,
-    color: '#333',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#696E79',
+    textAlign: 'center',
+    marginBottom: 40,
+  },
+  formContainer: {
+    marginBottom: 40,
   },
   input: {
     width: '100%',
-    height: 50,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    marginBottom: 15,
+    height: 56,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    color: '#FFFFFF',
+    fontSize: 16,
   },
   button: {
     width: '100%',
-    height: 50,
-    backgroundColor: '#28a745',
+    height: 56,
+    backgroundColor: '#01D38D',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 8,
-    marginBottom: 15,
+    borderRadius: 28,
+    marginBottom: 16,
   },
   buttonDisabled: {
-    backgroundColor: '#a3d9b1', // Lighter shade when disabled
+    backgroundColor: 'rgba(1, 211, 141, 0.6)',
   },
   buttonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
   },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  footerText: {
+    color: '#696E79',
+    fontSize: 16,
+  },
   linkText: {
-    color: '#007bff',
-    marginTop: 10,
+    color: '#01D38D',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

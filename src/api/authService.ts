@@ -115,6 +115,7 @@ export interface OnboardingProfileData {
   activityLevel?: string;
   healthConditions?: string[];
   dietaryRestrictions?: string[];
+  onboardingCompleted?: boolean;
   // Add any other fields you collect
 }
 

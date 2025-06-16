@@ -44,6 +44,7 @@ export interface Exercise {
     benefits: string[];
     commonMistakes: string[];
   };
+  imageUrl?: string;
   mediaUrls?: {
     video?: string;
     image?: string;

@@ -9,6 +9,11 @@ export interface UserWorkoutPlan {
   createdAt: string; // Or Date
   updatedAt: string; // Or Date
   isAIgenerated: boolean;
+  durationEstimateMinutes?: number;
+  caloriesBurned?: number;
+  description?: string;
+  type?: string;
+  difficulty?: string;
 }
 
 interface SaveWorkoutPlanData {

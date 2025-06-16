@@ -1,12 +1,12 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { RootStackParamList } from './types';
 import { useAuth } from '../store/AuthContext'; // Import useAuth
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native'; // Added Text for loading indicator
 
 // Import screens
-import WelcomeScreen from '../screens/Home/WelcomeScreen';
+import WelcomeScreen from '../screens/Onboarding/WelcomeScreen';
 import LoginScreen from '../screens/Auth/LoginScreen';
 import SignupScreen from '../screens/Auth/SignupScreen';
 import ForgotPasswordScreen from '../screens/Auth/ForgotPasswordScreen';
@@ -42,20 +42,48 @@ const MainAppPlaceholder = () => (
 
 const Stack = createStackNavigator<RootStackParamList>();
 
+const AppTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: '#01D38D',
+    background: '#191E29',
+    card: '#132D46',
+    text: '#FFFFFF',
+    border: 'transparent',
+  },
+};
+
 const AppNavigator = () => {
   const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#FFFFFF" />
       </View>
     );
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <NavigationContainer theme={AppTheme}>
+      <Stack.Navigator
+        id={undefined}
+        screenOptions={{
+          headerShown: false,
+          headerStyle: {
+            backgroundColor: '#191E29',
+            borderBottomWidth: 0,
+            elevation: 0,
+            shadowOpacity: 0,
+          },
+          headerTintColor: '#FFFFFF',
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+          cardStyle: { backgroundColor: '#191E29' },
+        }}
+      >
         {isAuthenticated ? (
           <>
             {user && user.profile && user.profile.gender ? ( // Example check for onboarding
@@ -229,6 +257,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#191E29',
   },
 });
 

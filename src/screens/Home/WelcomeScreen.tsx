@@ -23,9 +23,15 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
       </TouchableOpacity>
       <TouchableOpacity 
         style={[styles.button, styles.signupButton]} 
+        onPress={() => navigation.navigate('GenderSelection')
+      }>
+        <Text style={[styles.buttonText, styles.signupButtonText]}>Get Started</Text>
+      </TouchableOpacity>
+      <TouchableOpacity 
+        style={[styles.button, styles.createAccountButton]} 
         onPress={() => navigation.navigate('Signup')
       }>
-        <Text style={[styles.buttonText, styles.signupButtonText]}>Sign Up</Text>
+        <Text style={[styles.buttonText, styles.createAccountButtonText]}>Create Account</Text>
       </TouchableOpacity>
       {/* <TouchableOpacity onPress={() => console.log('Continue as Guest')}> 
         <Text style={styles.guestText}>Continue as Guest (Limited Access)</Text>
@@ -81,6 +87,14 @@ const styles = StyleSheet.create({
   },
   signupButtonText: {
     color: '#fff', // Text color for signup button
+  },
+  createAccountButton: {
+    backgroundColor: 'transparent',
+    borderColor: '#fff',
+    borderWidth: 2,
+  },
+  createAccountButtonText: {
+    color: '#fff', // Text color for create account button
   },
   guestText: {
     color: '#f0f0f0',

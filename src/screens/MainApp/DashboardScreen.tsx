@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../store/AuthContext';
 import { useNavigation, CompositeNavigationProp, useFocusEffect, RouteProp, TabActions } from '@react-navigation/native';
@@ -10,12 +10,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { fetchUserWorkoutPlans, UserWorkoutPlan } from '../../api/planService';
 import { fetchUserDietPlans, DietPlan } from '../../api/dietService';
 import { DisplayableWorkoutPlan } from '../Workouts/WorkoutListScreen';
+import Animated, { FadeInDown, FadeInRight, Layout } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // Neumorphic components
 import { useAppTheme } from '../../styles/useAppTheme';
 import NeumorphicView from '../../components/common/NeumorphicView';
 import AppText from '../../components/common/AppText';
 import NeumorphicButton from '../../components/common/NeumorphicButton';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Define more specific navigation types for DashboardScreen
 type DashboardScreenNavigationProp = CompositeNavigationProp<
@@ -58,6 +62,12 @@ const DashboardScreen = () => {
     "Fuel your body with nutritious food. It's your temple."
   ], []);
   const [currentTip, setCurrentTip] = useState("");
+
+  const [streakCount, setStreakCount] = useState(0);
+  const [nextWorkout, setNextWorkout] = useState<string | null>(null);
+  const [waterIntake, setWaterIntake] = useState(0);
+  const [dailySteps, setDailySteps] = useState(0);
+  const [caloriesBurned, setCaloriesBurned] = useState(0);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -137,6 +147,23 @@ const DashboardScreen = () => {
     fetchData();
   };
 
+  // New function to handle water intake tracking
+  const handleWaterIntake = () => {
+    setWaterIntake(prev => Math.min(prev + 250, 3000)); // Add 250ml, max 3L
+  };
+
+  // Calculate progress percentage for circular gauge
+  const calculateDailyProgress = () => {
+    // Example calculation based on steps, workouts, and water intake
+    const stepsGoal = 10000;
+    const waterGoal = 3000;
+    const stepsProgress = Math.min(dailySteps / stepsGoal, 1);
+    const waterProgress = Math.min(waterIntake / waterGoal, 1);
+    const workoutProgress = workoutsThisWeek > 0 ? 1 : 0;
+    
+    return Math.round(((stepsProgress + waterProgress + workoutProgress) / 3) * 100);
+  };
+
   if (isLoading && !isRefreshing) {
     return (
         <SafeAreaView style={[themedStyles.container, themedStyles.centered]}>
@@ -161,182 +188,245 @@ const DashboardScreen = () => {
       <ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={themedStyles.scrollContent}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} colors={[theme.currentColors.primary]} tintColor={theme.currentColors.primary} />}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} colors={[theme.currentColors.primary]} />}
       >
-        {/* Header Area */}
-        <View style={themedStyles.headerContainer}>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={themedStyles.avatarContainer}>
-            {/* Placeholder for Avatar - an icon for now */}
-            <Ionicons name="person-circle-outline" size={44} color={theme.currentColors.primary} />
-          </TouchableOpacity>
-          <View style={themedStyles.greetingContainer}>
-            <AppText variant="h2" fontWeight="bold">Hello, {user?.fullName?.split(' ')[0] || 'User'}!</AppText>
-            <AppText variant="body2" color="textSecondary">Let's make today count.</AppText>
+        {/* Enhanced Header with Gradient Background */}
+        <LinearGradient
+          colors={[theme.currentColors.primary + '20', theme.currentColors.background]}
+          style={themedStyles.headerGradient}
+        >
+          <View style={themedStyles.headerContainer}>
+            <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={themedStyles.avatarContainer}>
+              <NeumorphicView type="pressedIn" style={themedStyles.avatarWrapper}>
+                <Ionicons name="person-circle-outline" size={44} color={theme.currentColors.primary} />
+              </NeumorphicView>
+            </TouchableOpacity>
+            <View style={themedStyles.greetingContainer}>
+              <Animated.View entering={FadeInDown.delay(200)}>
+                <AppText variant="h2" fontWeight="bold">Hello, {user?.fullName?.split(' ')[0] || 'User'}!</AppText>
+                <AppText variant="body2" color="textSecondary">Let's make today count.</AppText>
+              </Animated.View>
+            </View>
+            <NeumorphicButton 
+              iconName="notifications-outline" 
+              neumorphicType="flat" 
+              neumorphicSize="small"
+              containerStyle={themedStyles.headerIcon}
+              iconSize={26}
+              onPress={() => {/* TODO: Notification action */}}
+            />
           </View>
-          <NeumorphicButton 
-            iconName="notifications-outline" 
-            neumorphicType="flat" 
-            neumorphicSize="small"
-            containerStyle={{...themedStyles.headerIcon, padding: 0}}
-            iconSize={26}
-            onPress={() => {/* TODO: Notification action */}}
-          />
-        </View>
+        </LinearGradient>
 
-        {/* Main Info/Gauge Area (Circular Placeholder) */}
-        <View style={themedStyles.gaugePlaceholderOuter}>
+        {/* Enhanced Progress Circle */}
+        <Animated.View entering={FadeInDown.delay(400)} style={themedStyles.gaugePlaceholderOuter}>
           <NeumorphicView 
             type="flat"
             style={themedStyles.circularGaugePlaceholder}
           >
-            <Ionicons name="trophy-outline" size={60} color={theme.currentColors.accent} />
-            <AppText variant="h3" color="accent" style={{marginTop: theme.spacing.sm}}>Daily Goal</AppText>
-            <AppText variant="caption" color="textSecondary" style={{marginTop: theme.spacing.xs}}>75% Complete</AppText> 
-          </NeumorphicView>
-        </View>
-
-        {/* Quick Action Buttons (Circular) */}
-        <View style={themedStyles.quickActionsRowContainer}>
-          {/* Start/Continue Workout Button */}
-          <View style={themedStyles.quickActionButtonWrapper}>
-            <NeumorphicButton
-              neumorphicType="raised" 
-              iconName={recentWorkout ? "play-circle-outline" : "walk-outline"}
-              iconSize={28}
-              buttonType="default"
-              containerStyle={{...themedStyles.circularButton, paddingVertical: 0, paddingHorizontal: 0}}
-              onPress={() => {
-                if (recentWorkout) {
-                    const displayablePlan: DisplayableWorkoutPlan = {
-                        _id: recentWorkout._id,
-                        planName: recentWorkout.planName,
-                        exercises: recentWorkout.exercises,
-                        createdAt: recentWorkout.createdAt,
-                        updatedAt: recentWorkout.updatedAt,
-                        description: (recentWorkout as any).description,
-                        type: (recentWorkout as any).type,
-                        difficulty: (recentWorkout as any).difficulty,
-                        durationEstimateMinutes: (recentWorkout as any).durationEstimateMinutes,
-                        isAIGenerated: recentWorkout.isAIgenerated,
-                    };
-                    navigation.navigate('Workouts', { 
-                        screen: 'WorkoutDetail', 
-                        params: { planObject: displayablePlan }, 
-                    });
-                } else {
-                    navigation.navigate('Workouts', {
-                        screen: 'WorkoutList',
-                    });
-                }
-              }}
-            />
-            <AppText variant="caption" style={themedStyles.quickActionLabel}>Workout</AppText>
-          </View>
-
-          {/* Create New Plan Button */}
-          <View style={themedStyles.quickActionButtonWrapper}>
-            <NeumorphicButton
-              neumorphicType="raised"
-              iconName="add-circle-outline"
-              iconSize={28}
-              buttonType="default"
-              containerStyle={{...themedStyles.circularButton, paddingVertical: 0, paddingHorizontal: 0}}
-              onPress={() => navigation.navigate('CreatePlan')}
-            />
-            <AppText variant="caption" style={themedStyles.quickActionLabel}>New Plan</AppText>
-          </View>
-
-          {/* View Diet Button */}
-          <View style={themedStyles.quickActionButtonWrapper}>
-            <NeumorphicButton
-              neumorphicType="raised"
-              iconName="restaurant-outline"
-              iconSize={28}
-              buttonType="default"
-              containerStyle={{...themedStyles.circularButton, paddingVertical: 0, paddingHorizontal: 0}}
-              onPress={() => navigation.dispatch(TabActions.jumpTo('Diet'))}
-            />
-            <AppText variant="caption" style={themedStyles.quickActionLabel}>My Diet</AppText>
-          </View>
-
-          {/* Log Progress Button */}
-          <View style={themedStyles.quickActionButtonWrapper}>
-            <NeumorphicButton
-              neumorphicType="raised"
-              iconName="checkmark-done-outline"
-              iconSize={28}
-              buttonType="default"
-              containerStyle={{...themedStyles.circularButton, paddingVertical: 0, paddingHorizontal: 0}}
-              onPress={() => navigation.dispatch(TabActions.jumpTo('Progress'))}
-            />
-            <AppText variant="caption" style={themedStyles.quickActionLabel}>Log Entry</AppText>
-          </View>
-        </View>
-
-        {/* Compact Info Cards */}
-        <View style={themedStyles.compactCardsContainer}>
-          {[
-            {
-              id: 'totalWorkouts',
-              icon: 'barbell-outline' as keyof typeof Ionicons.glyphMap,
-              title: 'Total Plans',
-              data: `${totalWorkouts}`,
-              color: theme.currentColors.primary,
-              onPress: () => navigation.dispatch(TabActions.jumpTo('Workouts')),
-            },
-            {
-              id: 'workoutsThisWeek',
-              icon: 'flame-outline' as keyof typeof Ionicons.glyphMap,
-              title: 'This Week',
-              data: `${workoutsThisWeek} Done`,
-              color: theme.currentColors.accentSecondary, // Orange accent
-              onPress: () => navigation.dispatch(TabActions.jumpTo('Progress')),
-            },
-            {
-              id: 'currentDiet',
-              icon: 'fast-food-outline' as keyof typeof Ionicons.glyphMap,
-              title: 'Current Diet',
-              data: recentDietPlan?.planName || 'Not Set',
-              color: theme.currentColors.accent, // Green accent
-              onPress: () => navigation.dispatch(TabActions.jumpTo('Diet')),
-            },
-          ].map((card) => (
-            <TouchableOpacity 
-                key={card.id} 
-                style={themedStyles.compactCardWrapper} 
-                onPress={card.onPress} 
-                activeOpacity={0.8}
-            >
-              <NeumorphicView type="raised" size="small" style={themedStyles.compactCard}>
-                <Ionicons name={card.icon} size={26} color={card.color || theme.currentColors.primary} style={themedStyles.compactCardIcon} />
-                <View style={themedStyles.compactCardTextContainer}>
-                    <AppText variant="label" fontWeight="semibold" style={{color: card.color || theme.currentColors.primary}}>{card.title}</AppText>
-                    <AppText variant="caption" color="textSecondary" numberOfLines={2}>{card.data}</AppText>
-                </View>
-              </NeumorphicView>
-            </TouchableOpacity>
-          ))}
-        </View>
-        
-        {/* Full-width Today's Tip Card */}
-        <TouchableOpacity
-          style={themedStyles.tipCardFullWidthWrapper}
-          onPress={() => setCurrentTip(motivationalTips[Math.floor(Math.random() * motivationalTips.length)])}
-          activeOpacity={0.8}
-        >
-          <NeumorphicView type="raised" size="medium" style={themedStyles.tipCardFullWidth}>
-            <Ionicons name="bulb-outline" size={28} color={theme.currentColors.secondary} style={themedStyles.tipCardIconStyle} />
-            <View style={themedStyles.tipCardTextContentStyle}>
-              <AppText variant="label" fontWeight="semibold" style={{ color: theme.currentColors.secondary }}>Today's Tip</AppText>
-              <AppText variant="body2" color="textSecondary" style={{ marginTop: theme.spacing.xs }}>
-                {currentTip || 'Stay motivated!'}
+            <View style={themedStyles.progressCircleContent}>
+              <Ionicons name="trophy-outline" size={60} color={theme.currentColors.accent} />
+              <AppText variant="h2" color="accent" style={themedStyles.progressPercentage}>
+                {calculateDailyProgress()}%
+              </AppText>
+              <AppText variant="body2" color="textSecondary" style={themedStyles.progressLabel}>
+                Daily Goal Progress
               </AppText>
             </View>
-            {/* Optional: Refresh icon, can be added back here if desired */}
-            {/* <Ionicons name="refresh-outline" size={22} color={theme.currentColors.textSecondary} style={themedStyles.tipCardRefreshIconStyle} /> */}
           </NeumorphicView>
-        </TouchableOpacity>
+        </Animated.View>
 
+        {/* Stats Grid */}
+        <Animated.View entering={FadeInDown.delay(600)} style={themedStyles.statsGrid}>
+          <View style={themedStyles.statsRow}>
+            <NeumorphicView type="pressedIn" style={themedStyles.statCard}>
+              <Ionicons name="footsteps-outline" size={24} color={theme.currentColors.primary} />
+              <AppText variant="h3">{dailySteps.toLocaleString()}</AppText>
+              <AppText variant="caption" color="textSecondary">Steps</AppText>
+            </NeumorphicView>
+            <NeumorphicView type="pressedIn" style={themedStyles.statCard}>
+              <Ionicons name="flame-outline" size={24} color={theme.currentColors.accentSecondary} />
+              <AppText variant="h3">{caloriesBurned}</AppText>
+              <AppText variant="caption" color="textSecondary">Calories</AppText>
+            </NeumorphicView>
+          </View>
+          <View style={themedStyles.statsRow}>
+            <NeumorphicView type="pressedIn" style={themedStyles.statCard}>
+              <Ionicons name="water-outline" size={24} color={theme.currentColors.accent} />
+              <AppText variant="h3">{(waterIntake / 1000).toFixed(1)}L</AppText>
+              <AppText variant="caption" color="textSecondary">Water</AppText>
+            </NeumorphicView>
+            <NeumorphicView type="pressedIn" style={themedStyles.statCard}>
+              <Ionicons name="calendar-outline" size={24} color={theme.currentColors.secondary} />
+              <AppText variant="h3">{streakCount}</AppText>
+              <AppText variant="caption" color="textSecondary">Day Streak</AppText>
+            </NeumorphicView>
+          </View>
+        </Animated.View>
+
+        {/* Quick Actions with Enhanced Design */}
+        <Animated.View entering={FadeInDown.delay(800)} style={themedStyles.quickActionsContainer}>
+          <AppText variant="h3" style={themedStyles.sectionTitle}>Quick Actions</AppText>
+          <View style={themedStyles.quickActionsGrid}>
+            {[
+              {
+                id: 'startWorkout',
+                icon: recentWorkout ? "play-circle-outline" : "walk-outline",
+                label: recentWorkout ? "Continue Workout" : "Start Workout",
+                color: theme.currentColors.primary,
+                onPress: () => {
+                  if (recentWorkout) {
+                    const displayablePlan: DisplayableWorkoutPlan = {
+                      _id: recentWorkout._id,
+                      planName: recentWorkout.planName,
+                      exercises: recentWorkout.exercises,
+                      createdAt: recentWorkout.createdAt,
+                      updatedAt: recentWorkout.updatedAt,
+                      description: (recentWorkout as any).description,
+                      type: (recentWorkout as any).type,
+                      difficulty: (recentWorkout as any).difficulty,
+                      durationEstimateMinutes: (recentWorkout as any).durationEstimateMinutes,
+                      isAIGenerated: recentWorkout.isAIgenerated,
+                    };
+                    navigation.navigate('Workouts', { 
+                      screen: 'WorkoutDetail', 
+                      params: { workout: displayablePlan }, 
+                    });
+                  } else {
+                    navigation.navigate('Workouts', {
+                      screen: 'WorkoutList',
+                    });
+                  }
+                }
+              },
+              {
+                id: 'newPlan',
+                icon: "add-circle-outline",
+                label: "New Plan",
+                color: theme.currentColors.secondary,
+                onPress: () => navigation.navigate('CreatePlan')
+              },
+              {
+                id: 'diet',
+                icon: "restaurant-outline",
+                label: "My Diet",
+                color: theme.currentColors.accent,
+                onPress: () => navigation.dispatch(TabActions.jumpTo('Diet'))
+              },
+              {
+                id: 'progress',
+                icon: "checkmark-done-outline",
+                label: "Log Progress",
+                color: theme.currentColors.accentSecondary,
+                onPress: () => navigation.dispatch(TabActions.jumpTo('Progress'))
+              }
+            ].map((action) => (
+              <TouchableOpacity
+                key={action.id}
+                style={themedStyles.quickActionButton}
+                onPress={action.onPress}
+              >
+                <NeumorphicView type="raised" style={themedStyles.quickActionButtonInner}>
+                  <Ionicons name={action.icon as any} size={28} color={action.color} />
+                  <AppText variant="caption" style={[themedStyles.quickActionLabel, { color: action.color }]}>
+                    {action.label}
+                  </AppText>
+                </NeumorphicView>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Animated.View>
+
+        {/* Enhanced Info Cards */}
+        <Animated.View entering={FadeInDown.delay(1000)} style={themedStyles.infoCardsContainer}>
+          <AppText variant="h3" style={themedStyles.sectionTitle}>Today's Overview</AppText>
+          <View style={themedStyles.infoCardsGrid}>
+            {[
+              {
+                id: 'totalWorkouts',
+                icon: 'barbell-outline',
+                title: 'Total Plans',
+                data: `${totalWorkouts}`,
+                color: theme.currentColors.primary,
+                onPress: () => navigation.dispatch(TabActions.jumpTo('Workouts')),
+              },
+              {
+                id: 'workoutsThisWeek',
+                icon: 'flame-outline',
+                title: 'This Week',
+                data: `${workoutsThisWeek} Done`,
+                color: theme.currentColors.accentSecondary,
+                onPress: () => navigation.dispatch(TabActions.jumpTo('Progress')),
+              },
+              {
+                id: 'currentDiet',
+                icon: 'fast-food-outline',
+                title: 'Current Diet',
+                data: recentDietPlan?.planName || 'Not Set',
+                color: theme.currentColors.accent,
+                onPress: () => navigation.dispatch(TabActions.jumpTo('Diet')),
+              },
+              {
+                id: 'nextWorkout',
+                icon: 'calendar-outline',
+                title: 'Next Workout',
+                data: nextWorkout || 'Not Scheduled',
+                color: theme.currentColors.secondary,
+                onPress: () => navigation.dispatch(TabActions.jumpTo('Workouts')),
+              }
+            ].map((card) => (
+              <TouchableOpacity 
+                key={card.id} 
+                style={themedStyles.infoCard} 
+                onPress={card.onPress}
+              >
+                <NeumorphicView type="raised" style={themedStyles.infoCardInner}>
+                  <Ionicons name={card.icon as any} size={26} color={card.color} style={themedStyles.infoCardIcon} />
+                  <View style={themedStyles.infoCardContent}>
+                    <AppText variant="label" fontWeight="semibold" style={{ color: card.color }}>{card.title}</AppText>
+                    <AppText variant="caption" color="textSecondary" numberOfLines={2}>{card.data}</AppText>
+                  </View>
+                </NeumorphicView>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Animated.View>
+        
+        {/* Enhanced Motivational Tip Card */}
+        <Animated.View 
+          entering={FadeInDown.delay(1200)}
+          style={themedStyles.tipCardContainer}
+        >
+          <TouchableOpacity
+            onPress={() => setCurrentTip(motivationalTips[Math.floor(Math.random() * motivationalTips.length)])}
+            activeOpacity={0.8}
+          >
+            <NeumorphicView type="raised" style={themedStyles.tipCard}>
+              <LinearGradient
+                colors={[theme.currentColors.primary + '20', theme.currentColors.background]}
+                style={themedStyles.tipCardGradient}
+              >
+                <View style={themedStyles.tipCardContent}>
+                  <Ionicons name="bulb-outline" size={28} color={theme.currentColors.secondary} />
+                  <View style={themedStyles.tipTextContainer}>
+                    <AppText variant="label" fontWeight="semibold" style={{ color: theme.currentColors.secondary }}>
+                      Today's Tip
+                    </AppText>
+                    <AppText variant="body2" color="textSecondary" style={themedStyles.tipText}>
+                      {currentTip || 'Stay motivated!'}
+                    </AppText>
+                  </View>
+                  <Ionicons 
+                    name="refresh-outline" 
+                    size={24} 
+                    color={theme.currentColors.textSecondary} 
+                    style={themedStyles.tipRefreshIcon}
+                  />
+                </View>
+              </LinearGradient>
+            </NeumorphicView>
+          </TouchableOpacity>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -354,35 +444,147 @@ const createDashboardStyles = (theme: ReturnType<typeof useAppTheme>) => StyleSh
     padding: theme.spacing.lg,
   },
   scrollContent: {
-    padding: theme.spacing.md,
+    paddingBottom: theme.spacing.xl,
+  },
+  headerGradient: {
+    paddingTop: Platform.OS === 'ios' ? 0 : theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.lg,
+    marginBottom: theme.spacing.md,
   },
   headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.xs,
+    justifyContent: 'space-between',
   },
   avatarContainer: {
     marginRight: theme.spacing.md,
+  },
+  avatarWrapper: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   greetingContainer: {
     flex: 1,
   },
   headerIcon: {
-    padding: theme.spacing.sm,
+    marginLeft: theme.spacing.sm,
   },
   gaugePlaceholderOuter: {
     alignItems: 'center',
-    marginBottom: theme.spacing.lg,
-    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.xl,
   },
   circularGaugePlaceholder: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+    width: SCREEN_WIDTH * 0.5,
+    height: SCREEN_WIDTH * 0.5,
+    borderRadius: SCREEN_WIDTH * 0.25,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  progressCircleContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressPercentage: {
+    marginTop: theme.spacing.sm,
+    fontSize: 32,
+    fontWeight: 'bold',
+  },
+  progressLabel: {
+    marginTop: theme.spacing.xs,
+  },
+  statsGrid: {
+    marginBottom: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.md,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.md,
+  },
+  statCard: {
+    width: '48%',
     padding: theme.spacing.md,
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  sectionTitle: {
+    marginBottom: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    color: theme.currentColors.textPrimary,
+    fontWeight: '600',
+  },
+  quickActionsContainer: {
+    marginBottom: theme.spacing.xl,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: theme.spacing.md,
+    justifyContent: 'space-between',
+  },
+  quickActionButton: {
+    width: '48%',
+    marginBottom: theme.spacing.md,
+  },
+  quickActionButtonInner: {
+    padding: theme.spacing.md,
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  quickActionLabel: {
+    marginTop: theme.spacing.sm,
+    textAlign: 'center',
+  },
+  infoCardsContainer: {
+    marginBottom: theme.spacing.xl,
+  },
+  infoCardsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: theme.spacing.md,
+    justifyContent: 'space-between',
+  },
+  infoCard: {
+    width: '48%',
+    marginBottom: theme.spacing.md,
+  },
+  infoCardInner: {
+    padding: theme.spacing.md,
+    borderRadius: 12,
+  },
+  infoCardIcon: {
+    marginBottom: theme.spacing.sm,
+  },
+  infoCardContent: {
+    flex: 1,
+  },
+  tipCardContainer: {
+    marginHorizontal: theme.spacing.md,
+  },
+  tipCard: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  tipCardGradient: {
+    padding: theme.spacing.lg,
+  },
+  tipCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  tipTextContainer: {
+    flex: 1,
+    marginHorizontal: theme.spacing.md,
+  },
+  tipText: {
+    marginTop: theme.spacing.xs,
+  },
+  tipRefreshIcon: {
+    opacity: 0.7,
   },
   errorText: {
     textAlign: 'center',
@@ -393,74 +595,6 @@ const createDashboardStyles = (theme: ReturnType<typeof useAppTheme>) => StyleSh
     textAlign: 'center',
     marginBottom: theme.spacing.md,
   },
-  // Styles for Quick Action Buttons
-  quickActionsRowContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'flex-start', 
-    marginBottom: theme.spacing.lg,
-    marginTop: theme.spacing.md, // Add some margin top after the gauge placeholder
-  },
-  quickActionButtonWrapper: {
-    alignItems: 'center',
-    maxWidth: 80, 
-  },
-  circularButton: {
-    width: 64, // Slightly larger for better touch
-    height: 64,
-    borderRadius: 32,
-    // NeumorphicButton handles internal centering of icon
-    // padding props are for the NeumorphicView container inside TouchableOpacity
-    // If icon is not centered, might need to adjust NeumorphicButton internal styles or pass specific iconStyle prop
-  },
-  quickActionLabel: {
-    marginTop: theme.spacing.xs, 
-    textAlign: 'center',
-    color: theme.currentColors.textSecondary, 
-    fontSize: theme.typography.fontSizes.xs, 
-  },
-  // Styles for Compact Info Cards
-  compactCardsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginTop: theme.spacing.lg, // Increased margin top
-  },
-  compactCardWrapper: {
-    width: '48.5%', // Adjusted for a tiny bit more space with justifyContent: space-between
-    marginBottom: theme.spacing.md, 
-  },
-  compactCard: {
-    padding: theme.spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 90, // Ensure cards have a decent minimum height for tapability and content
-  },
-  compactCardIcon: {
-    marginRight: theme.spacing.md, // Increased margin for icon
-  },
-  compactCardTextContainer: {
-    flex: 1, 
-  },
-  // Styles for Full-width Tip Card
-  tipCardFullWidthWrapper: {
-    marginTop: theme.spacing.lg,
-    marginBottom: theme.spacing.md,
-  },
-  tipCardFullWidth: {
-    padding: theme.spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  tipCardIconStyle: {
-    marginRight: theme.spacing.md,
-  },
-  tipCardTextContentStyle: {
-    flex: 1,
-  },
-  tipCardRefreshIconStyle: { // Style for the refresh icon
-    marginLeft: theme.spacing.sm,
-  }
 });
 
 export default DashboardScreen; 

@@ -1,5 +1,5 @@
 {
-  "compilerOptions": {
+  "comprilerOptions": {
     "allowJs": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,

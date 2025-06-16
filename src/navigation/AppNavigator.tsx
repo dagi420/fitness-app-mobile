@@ -11,8 +11,11 @@ import LoginScreen from '../screens/Auth/LoginScreen';
 import SignupScreen from '../screens/Auth/SignupScreen';
 import ForgotPasswordScreen from '../screens/Auth/ForgotPasswordScreen';
 // Import Onboarding screens
+import GenderSelectionScreen from '../screens/Onboarding/GenderSelectionScreen';
 import GoalSelectionScreen from '../screens/Onboarding/GoalSelectionScreen';
-import UserDetailsScreen from '../screens/Onboarding/UserDetailsScreen'; // Import UserDetailsScreen
+import UserDetailsScreen from '../screens/Onboarding/UserDetailsScreen';
+import ActivityLevelScreen from '../screens/Onboarding/ActivityLevelScreen';
+import OnboardingSummaryScreen from '../screens/Onboarding/OnboardingSummaryScreen';
 import MainTabNavigator from './MainTabNavigator'; // Import MainTabNavigator
 import CreatePlanScreen from '../screens/Planner/CreatePlanScreen'; // Import CreatePlanScreen
 import ProfileScreen from '../screens/Profile/ProfileScreen'; // Import ProfileScreen
@@ -27,7 +30,6 @@ import AIWorkoutConfigurationScreen from '../screens/AI/AIWorkoutConfigurationSc
 import ProgressHistoryScreen from '../screens/Progress/ProgressHistoryScreen';
 import ProgressLogEntryScreen from '../screens/Progress/ProgressLogEntryScreen';
 import PhotoViewerScreen from '../screens/Progress/PhotoViewerScreen'; // Import PhotoViewerScreen
-// import UserDetailsScreen from '../screens/Onboarding/UserDetailsScreen'; // We'll handle navigation to this from GoalSelectionScreen
 
 // Remove MainAppPlaceholder or comment it out
 /*
@@ -56,12 +58,6 @@ const AppNavigator = () => {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isAuthenticated ? (
           <>
-            {/* 
-              Further logic can be added here: 
-              If user.profile.onboardingComplete (or similar flag) is false, 
-              navigate to a specific OnboardingStack. Otherwise, to MainAppStack.
-              For now, we'll just show MainAppPlaceholder or Onboarding directly.
-            */}
             {user && user.profile && user.profile.gender ? ( // Example check for onboarding
               <>
                 <Stack.Screen name="MainApp" component={MainTabNavigator} />
@@ -155,20 +151,69 @@ const AppNavigator = () => {
                     presentation: 'modal', // Optional: can be a normal screen too
                   }} 
                 />
+                {/* Add onboarding screens for profile editing */}
+                <Stack.Screen 
+                  name="GenderSelection" 
+                  component={GenderSelectionScreen} 
+                  options={{ 
+                    headerShown: true, 
+                    title: 'Edit Gender', 
+                    presentation: 'modal'
+                  }} 
+                />
+                <Stack.Screen 
+                  name="GoalSelection" 
+                  component={GoalSelectionScreen} 
+                  options={{ 
+                    headerShown: true, 
+                    title: 'Edit Goals'
+                  }} 
+                />
+                <Stack.Screen 
+                  name="UserDetails" 
+                  component={UserDetailsScreen} 
+                  options={{ 
+                    headerShown: true, 
+                    title: 'Edit Details'
+                  }} 
+                />
+                <Stack.Screen 
+                  name="ActivityLevel" 
+                  component={ActivityLevelScreen} 
+                  options={{ 
+                    headerShown: true, 
+                    title: 'Edit Activity Level'
+                  }} 
+                />
+                <Stack.Screen 
+                  name="OnboardingSummary" 
+                  component={OnboardingSummaryScreen} 
+                  options={{ 
+                    headerShown: true, 
+                    title: 'Profile Updated'
+                  }} 
+                />
               </>
             ) : (
               // Group onboarding screens if user is not fully onboarded
               <>
+                <Stack.Screen name="GenderSelection" component={GenderSelectionScreen} />
+                <Stack.Screen name="GoalSelection" component={GoalSelectionScreen} />
+                <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
+                <Stack.Screen name="ActivityLevel" component={ActivityLevelScreen} />
+                <Stack.Screen name="OnboardingSummary" component={OnboardingSummaryScreen} />
                 <Stack.Screen name="Onboarding" component={GoalSelectionScreen} options={{ headerShown: true, title: 'Your Goals'}}/>
-                <Stack.Screen name="UserDetails" component={UserDetailsScreen} options={{ headerShown: true, title: 'Your Details' }} />
               </>
             )}
-            {/* Add other authenticated screens or nested navigators here */}
-            {/* e.g., <Stack.Screen name="Profile" component={ProfileScreen} /> */}
           </>
         ) : (
           <>
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="GenderSelection" component={GenderSelectionScreen} />
+            <Stack.Screen name="GoalSelection" component={GoalSelectionScreen} />
+            <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
+            <Stack.Screen name="ActivityLevel" component={ActivityLevelScreen} />
+            <Stack.Screen name="OnboardingSummary" component={OnboardingSummaryScreen} />
             <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: true, title: 'Login' }} />
             <Stack.Screen name="Signup" component={SignupScreen} options={{ headerShown: true, title: 'Create Account' }} />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ headerShown: true, title: 'Reset Password' }} />

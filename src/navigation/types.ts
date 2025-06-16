@@ -35,6 +35,9 @@ export type WorkoutsStackParamList = {
 
 export type RootStackParamList = {
   Welcome: undefined;
+  GenderSelection: undefined;
+  ActivityLevel: undefined;
+  OnboardingSummary: undefined;
   Login: undefined;
   Signup: undefined;
   ForgotPassword: undefined;

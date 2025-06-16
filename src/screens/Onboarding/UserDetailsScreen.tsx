@@ -1,9 +1,22 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TextInput, 
+  TouchableOpacity, 
+  ScrollView, 
+  Alert, 
+  Animated,
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform
+} from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuth } from '../../store/AuthContext';
 import { updateUserProfileOnboarding, OnboardingProfileData } from '../../api/authService';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type UserDetailsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'UserDetails'>;
 
@@ -20,13 +33,59 @@ const UserDetailsScreen: React.FC<UserDetailsScreenProps> = ({ navigation }) => 
   const [weight, setWeight] = useState(user?.profile?.weight?.toString() || '');
   const [isLoading, setIsLoading] = useState(false);
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const validateFields = () => {
+    if (!age || !height || !weight) {
+      Alert.alert('Missing Information', 'Please fill in all fields to continue.');
+      return false;
+    }
+
+    const ageNum = parseInt(age, 10);
+    const heightNum = parseFloat(height);
+    const weightNum = parseFloat(weight);
+
+    if (ageNum < 13 || ageNum > 120) {
+      Alert.alert('Invalid Age', 'Please enter a valid age between 13 and 120.');
+      return false;
+    }
+
+    if (heightNum < 100 || heightNum > 250) {
+      Alert.alert('Invalid Height', 'Please enter a valid height between 100cm and 250cm.');
+      return false;
+    }
+
+    if (weightNum < 30 || weightNum > 300) {
+      Alert.alert('Invalid Weight', 'Please enter a valid weight between 30kg and 300kg.');
+      return false;
+    }
+
+    return true;
+  };
+
   const handleFinishOnboarding = async () => {
     if (!user || !token) {
       Alert.alert('Error', 'User not authenticated. Please restart the app.');
       return;
     }
-    if (!age || !gender || !height || !weight) {
-      Alert.alert('Error', 'Please fill in all fields.');
+
+    if (!validateFields()) {
       return;
     }
 
@@ -42,8 +101,39 @@ const UserDetailsScreen: React.FC<UserDetailsScreenProps> = ({ navigation }) => 
       const response = await updateUserProfileOnboarding(user._id, profileData, token);
       if (response.success && response.user) {
         await updateUserInContext(response.user);
-        Alert.alert('Success', 'Profile updated!');
-        navigation.replace('MainApp');
+        navigation.navigate('ActivityLevel');
+      } else {
+        Alert.alert('Update Failed', response.message || 'Could not update profile.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred while updating your profile.');
+      console.error('Update profile error:', error);
+    }
+    setIsLoading(false);
+  };
+
+  const handleContinue = async () => {
+    if (!validateFields()) {
+      return;
+    }
+
+    if (!user || !token) {
+      Alert.alert('Error', 'User not authenticated. Please restart the app.');
+      return;
+    }
+
+    const profileData: OnboardingProfileData = {
+      age: parseInt(age, 10),
+      height: parseFloat(height),
+      weight: parseFloat(weight),
+    };
+
+    setIsLoading(true);
+    try {
+      const response = await updateUserProfileOnboarding(user._id, profileData, token);
+      if (response.success && response.user) {
+        await updateUserInContext(response.user);
+        navigation.navigate('ActivityLevel');
       } else {
         Alert.alert('Update Failed', response.message || 'Could not update profile.');
       }
@@ -55,96 +145,274 @@ const UserDetailsScreen: React.FC<UserDetailsScreenProps> = ({ navigation }) => 
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Tell us a bit more</Text>
-      <Text style={styles.subtitle}>This information helps in personalizing your experience.</Text>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
-      <TextInput
-        style={styles.input}
-        placeholder="Age"
-        keyboardType="numeric"
-        value={age}
-        onChangeText={setAge}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Gender (e.g., Male, Female, Other)"
-        value={gender}
-        onChangeText={setGender}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Height (cm)"
-        keyboardType="numeric"
-        value={height}
-        onChangeText={setHeight}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Weight (kg)"
-        keyboardType="numeric"
-        value={weight}
-        onChangeText={setWeight}
-      />
-
-      <TouchableOpacity 
-        style={[styles.nextButton, isLoading && styles.buttonDisabled]} 
-        onPress={handleFinishOnboarding}
-        disabled={isLoading}
+      <Animated.View
+        style={[
+          styles.headerContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          },
+        ]}
       >
-        <Text style={styles.nextButtonText}>{isLoading ? 'Saving...' : 'Finish Onboarding'}</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <Text style={styles.title}>Personal Details</Text>
+        <Text style={styles.subtitle}>
+          Help us calculate your personalized fitness metrics
+        </Text>
+        <View style={styles.progressIndicator}>
+          <View style={[styles.progressDot, styles.activeDot]} />
+          <View style={[styles.progressDot, styles.activeDot]} />
+          <View style={[styles.progressDot, styles.activeDot]} />
+          <View style={styles.progressDot} />
+        </View>
+      </Animated.View>
+
+      <ScrollView 
+        style={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <Animated.View
+          style={[
+            styles.formContainer,
+            {
+              opacity: fadeAnim,
+            },
+          ]}
+        >
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Age</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your age"
+                keyboardType="numeric"
+                value={age}
+                onChangeText={setAge}
+                maxLength={3}
+              />
+              <Text style={styles.inputUnit}>years</Text>
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Height</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your height"
+                keyboardType="numeric"
+                value={height}
+                onChangeText={setHeight}
+                maxLength={3}
+              />
+              <Text style={styles.inputUnit}>cm</Text>
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Weight</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your weight"
+                keyboardType="numeric"
+                value={weight}
+                onChangeText={setWeight}
+                maxLength={4}
+              />
+              <Text style={styles.inputUnit}>kg</Text>
+            </View>
+          </View>
+
+          <View style={styles.tipContainer}>
+            <Text style={styles.tipIcon}>💡</Text>
+            <Text style={styles.tipText}>
+              This information helps us create personalized workout and nutrition plans for you.
+            </Text>
+          </View>
+        </Animated.View>
+      </ScrollView>
+
+      <View style={styles.navigationContainer}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          disabled={isLoading}
+        >
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[
+            styles.continueButton,
+            ((!age || !height || !weight) || isLoading) && styles.disabledButton
+          ]} 
+          onPress={handleContinue}
+          disabled={(!age || !height || !weight) || isLoading}
+        >
+          <LinearGradient
+            colors={
+              (age && height && weight && !isLoading)
+                ? ['#667eea', '#764ba2'] as [string, string]
+                : ['#D1D5DB', '#D1D5DB'] as [string, string]
+            }
+            style={styles.buttonGradient}
+          >
+            <Text style={[
+              styles.continueButtonText,
+              ((!age || !height || !weight) || isLoading) && styles.disabledButtonText
+            ]}>
+              {isLoading ? 'Saving...' : 'Continue'}
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
-    justifyContent: 'center',
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    paddingTop: 60,
+  },
+  headerContainer: {
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 24,
+    marginBottom: 30,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 15,
+    color: '#1F2937',
     textAlign: 'center',
-    color: '#333',
+    marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
+    color: '#6B7280',
     textAlign: 'center',
-    marginBottom: 30,
-    color: '#666',
+    lineHeight: 24,
+    marginBottom: 20,
   },
-  input: {
-    width: '100%',
-    height: 50,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  nextButton: {
-    width: '100%',
-    height: 50,
-    backgroundColor: '#007bff',
-    justifyContent: 'center',
+  progressIndicator: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 8,
     marginTop: 20,
   },
-  buttonDisabled: {
-    backgroundColor: '#7abaff',
+  progressDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 4,
   },
-  nextButtonText: {
-    color: '#fff',
+  activeDot: {
+    backgroundColor: '#667eea',
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+  },
+  formContainer: {
+    flex: 1,
+  },
+  inputGroup: {
+    marginBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  input: {
+    flex: 1,
+    height: 48,
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  inputUnit: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  tipContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 20,
+    alignItems: 'flex-start',
+  },
+  tipIcon: {
+    fontSize: 20,
+    marginRight: 12,
+    marginTop: 2,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1E40AF',
+    lineHeight: 20,
+  },
+  navigationContainer: {
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+    paddingTop: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#6B7280',
+    textDecorationLine: 'underline',
+  },
+  continueButton: {
+    borderRadius: 25,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  buttonGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  continueButtonText: {
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  disabledButtonText: {
+    color: '#9CA3AF',
   },
 });
 

@@ -1,199 +1,539 @@
 import React from 'react';
-import { StyleSheet, ScrollView, SafeAreaView, Alert, TouchableOpacity, View, ViewProps } from 'react-native'; // Added View back
+import { StyleSheet, ScrollView, SafeAreaView, Alert, TouchableOpacity, View, Text, Dimensions } from 'react-native';
 import { useAuth } from '../../store/AuthContext';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/types';
-import { useAppTheme } from '../../styles/useAppTheme';
-import NeumorphicView from '../../components/common/NeumorphicView';
-import AppText from '../../components/common/AppText';
-import NeumorphicButton from '../../components/common/NeumorphicButton';
+import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-// Define navigation prop type for this screen
 type ProfileScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Profile'>;
 
-interface ProfileDetailItemProps {
+const { width } = Dimensions.get('window');
+
+interface ProfileStatCardProps {
+  icon: keyof typeof Ionicons.glyphMap;
   label: string;
-  value: string | number | undefined | null;
-  iconName?: keyof typeof Ionicons.glyphMap;
+  value: string;
+  color: string;
 }
 
-const ProfileDetailItem: React.FC<ProfileDetailItemProps> = ({ label, value, iconName }) => {
-  const theme = useAppTheme();
-  const styles = createThemedStyles(theme);
-
-  if (value === undefined || value === null || value === '') {
-    return null;
-  }
+const ProfileStatCard: React.FC<ProfileStatCardProps> = ({ icon, label, value, color }) => {
   return (
-    <View style={styles.detailItemContainer}>
-      {iconName && <Ionicons name={iconName} size={20} color={theme.currentColors.textSecondary} style={styles.detailItemIcon} />}
-      <AppText style={styles.detailItemLabel} variant="body2" color="textSecondary" fontWeight="semibold">{label}:</AppText>
-      <AppText style={styles.detailItemValue} variant="body2">{String(value)}</AppText>
+    <View style={styles.statCard}>
+      <LinearGradient
+        colors={[color + '20', color + '10']}
+        style={styles.statCardGradient}
+      >
+        <View style={[styles.statIconContainer, { backgroundColor: color + '20' }]}>
+          <Ionicons name={icon} size={24} color={color} />
+        </View>
+        <Text style={styles.statValue}>{value}</Text>
+        <Text style={styles.statLabel}>{label}</Text>
+      </LinearGradient>
     </View>
+  );
+};
+
+interface ProfileDetailItemProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  onPress?: () => void;
+}
+
+const ProfileDetailItem: React.FC<ProfileDetailItemProps> = ({ icon, label, value, onPress }) => {
+  return (
+    <TouchableOpacity style={styles.detailItem} onPress={onPress} activeOpacity={0.7}>
+      <View style={styles.detailItemLeft}>
+        <View style={styles.detailIconContainer}>
+          <Ionicons name={icon} size={20} color="#667eea" />
+        </View>
+        <View>
+          <Text style={styles.detailLabel}>{label}</Text>
+          <Text style={styles.detailValue}>{value}</Text>
+        </View>
+      </View>
+      {onPress && (
+        <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+      )}
+    </TouchableOpacity>
   );
 };
 
 const ProfileScreen = () => {
   const { user, logout } = useAuth();
   const navigation = useNavigation<ProfileScreenNavigationProp>();
-  const theme = useAppTheme();
-  const styles = createThemedStyles(theme);
 
   const handleLogout = async () => {
-    await logout();
-    Alert.alert("Logged Out", "You have been successfully logged out.");
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Logout", 
+          style: "destructive",
+          onPress: async () => {
+            await logout();
+            Alert.alert("Logged Out", "You have been successfully logged out.");
+          }
+        }
+      ]
+    );
   };
 
   if (!user) {
     return (
-      <SafeAreaView style={[styles.safeAreaBase, {backgroundColor: '#FFFFFF'}]}>
-        <NeumorphicView type="flat" style={[styles.centeredContainer, {backgroundColor: '#FFFFFF'}]}>
-          <AppText>No user data found. You might be logged out.</AppText>
-          <NeumorphicButton 
-            title="Go to Login" 
-            onPress={handleLogout} 
-            buttonType="primary"
-            iconName="log-in-outline"
-            containerStyle={{marginTop: theme.spacing.lg}}
-            />
-        </NeumorphicView>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="person-circle-outline" size={80} color="#E5E7EB" />
+          <Text style={styles.errorTitle}>No Profile Found</Text>
+          <Text style={styles.errorSubtitle}>Please login to view your profile</Text>
+          <TouchableOpacity style={styles.loginButton} onPress={handleLogout}>
+            <Text style={styles.loginButtonText}>Go to Login</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
 
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const calculateBMI = () => {
+    if (user.profile?.height && user.profile?.weight) {
+      const heightInM = user.profile.height / 100;
+      const bmi = user.profile.weight / (heightInM * heightInM);
+      return bmi.toFixed(1);
+    }
+    return 'N/A';
+  };
+
+  const formatActivityLevel = (level: string) => {
+    return level.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
   return (
-    <SafeAreaView style={[styles.safeAreaBase, {backgroundColor: '#FFFFFF'}]}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <NeumorphicView type="flat" style={[styles.container, {backgroundColor: '#FFFFFF'}]}>
-            <AppText variant="h1" fontWeight="bold" style={styles.title}>{user.fullName || 'User Profile'}</AppText>
-            <AppText variant="body1" color="textSecondary" style={styles.email}>{user.email}</AppText>
-
-            <NeumorphicView type="raised" style={styles.detailsSectionCard} borderRadius={theme.borders.radiusLarge}>
-              <View style={styles.sectionHeaderContainer}>
-                <Ionicons name="person-circle-outline" size={28} color={theme.currentColors.primary} style={styles.sectionHeaderIcon} />
-                <AppText variant="h3" style={styles.sectionTitle}>Personal Information</AppText>
-              </View>
-              <ProfileDetailItem label="Full Name" value={user.fullName} iconName="person-outline" />
-              <ProfileDetailItem label="Email" value={user.email} iconName="mail-outline" />
-              {user.profile && (
-                <>
-                  <ProfileDetailItem label="Age" value={user.profile.age} iconName="calendar-outline" />
-                  <ProfileDetailItem label="Gender" value={user.profile.gender} iconName="transgender-outline" />
-                  <ProfileDetailItem label="Height" value={user.profile.height ? `${user.profile.height} cm` : undefined} iconName="stats-chart-outline" />
-                  <ProfileDetailItem label="Weight" value={user.profile.weight ? `${user.profile.weight} kg` : undefined} iconName="barbell-outline" />
-                  <ProfileDetailItem label="Activity Level" value={user.profile.activityLevel} iconName="walk-outline" />
-                  {user.profile.workoutGoals && user.profile.workoutGoals.length > 0 && (
-                    <ProfileDetailItem label="Workout Goals" value={user.profile.workoutGoals.join(', ')} iconName="trophy-outline" />
-                  )}
-                  {user.profile.healthConditions && user.profile.healthConditions.length > 0 && (
-                     <ProfileDetailItem label="Health Conditions" value={user.profile.healthConditions.join(', ')} iconName="heart-outline" />
-                  )}
-                   {user.profile.dietaryRestrictions && user.profile.dietaryRestrictions.length > 0 && (
-                     <ProfileDetailItem label="Dietary Restrictions" value={user.profile.dietaryRestrictions.join(', ')} iconName="restaurant-outline"/>
-                  )}
-                </>
-              )}
-            </NeumorphicView>
-
-            <NeumorphicView type="raised" style={styles.detailsSectionCard} borderRadius={theme.borders.radiusLarge}>
-              <View style={styles.sectionHeaderContainer}>
-                <Ionicons name="analytics-outline" size={28} color={theme.currentColors.primary} style={styles.sectionHeaderIcon} />
-                <AppText variant="h3" style={styles.sectionTitle}>Progress Tracking</AppText>
-              </View>
-              <NeumorphicButton 
-                title="View Weight & Measurement History"
-                onPress={() => navigation.navigate('ProgressHistory')}
-                buttonType="default"
-                iconName="folder-open-outline"
-                iconSecondaryName="chevron-forward-outline"
-                neumorphicType="flat"
-                containerStyle={{ paddingVertical: theme.spacing.lg }}
-                fullWidth
-              />
-            </NeumorphicView>
-
-            <View style={styles.logoutButtonContainer}>
-              <NeumorphicButton 
-                title="Logout" 
-                onPress={handleLogout} 
-                buttonType="error" 
-                neumorphicType="pressedIn" 
-                iconName="log-out-outline"
-                fullWidth
-              />
+    <SafeAreaView style={styles.container}>
+      <ScrollView 
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <LinearGradient
+          colors={['#667eea', '#764ba2']}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerContent}>
+            <View style={styles.avatarContainer}>
+              <LinearGradient
+                colors={['#FF6B6B', '#FF8E53']}
+                style={styles.avatar}
+              >
+                <Text style={styles.avatarText}>
+                  {getInitials(user.fullName || 'User')}
+                </Text>
+              </LinearGradient>
+              <View style={styles.statusDot} />
             </View>
-        </NeumorphicView>
+            
+            <Text style={styles.userName}>{user.fullName || 'Fitness Enthusiast'}</Text>
+            <Text style={styles.userEmail}>{user.email}</Text>
+            
+            <TouchableOpacity 
+              style={styles.editButton}
+              onPress={() => navigation.navigate('GenderSelection')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="create-outline" size={18} color="#667eea" />
+              <Text style={styles.editButtonText}>Edit Profile</Text>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.statsSection}>
+          <Text style={styles.sectionTitle}>Health Overview</Text>
+          <View style={styles.statsGrid}>
+            <ProfileStatCard
+              icon="fitness-outline"
+              label="Weight"
+              value={user.profile?.weight ? `${user.profile.weight} kg` : 'N/A'}
+              color="#10B981"
+            />
+            <ProfileStatCard
+              icon="resize-outline"
+              label="Height"
+              value={user.profile?.height ? `${user.profile.height} cm` : 'N/A'}
+              color="#3B82F6"
+            />
+            <ProfileStatCard
+              icon="analytics-outline"
+              label="BMI"
+              value={calculateBMI()}
+              color="#F59E0B"
+            />
+            <ProfileStatCard
+              icon="calendar-outline"
+              label="Age"
+              value={user.profile?.age ? `${user.profile.age} yrs` : 'N/A'}
+              color="#EF4444"
+            />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Personal Information</Text>
+          <View style={styles.card}>
+            {user.profile?.gender && (
+              <ProfileDetailItem
+                icon="body-outline"
+                label="Gender"
+                value={user.profile.gender.charAt(0).toUpperCase() + user.profile.gender.slice(1)}
+              />
+            )}
+            {user.profile?.activityLevel && (
+              <ProfileDetailItem
+                icon="walk-outline"
+                label="Activity Level"
+                value={formatActivityLevel(user.profile.activityLevel)}
+              />
+            )}
+          </View>
+        </View>
+
+        {user.profile?.workoutGoals && user.profile.workoutGoals.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Fitness Goals</Text>
+            <View style={styles.card}>
+              <View style={styles.goalsContainer}>
+                {user.profile.workoutGoals.map((goal, index) => (
+                  <View key={index} style={styles.goalChip}>
+                    <Ionicons name="trophy" size={14} color="#667eea" />
+                    <Text style={styles.goalText}>
+                      {goal.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.card}>
+            <ProfileDetailItem
+              icon="analytics-outline"
+              label="Progress History"
+              value="View your fitness journey"
+              onPress={() => navigation.navigate('ProgressHistory')}
+            />
+            <View style={styles.divider} />
+            <ProfileDetailItem
+              icon="settings-outline"
+              label="App Settings"
+              value="Notifications & preferences"
+              onPress={() => {}}
+            />
+          </View>
+        </View>
+
+        <View style={styles.logoutSection}>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <LinearGradient
+              colors={['#FEE2E2', '#FECACA']}
+              style={styles.logoutGradient}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#DC2626" />
+              <Text style={styles.logoutText}>Logout</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-// createThemedStyles is now correctly scoped for ProfileScreen and its child ProfileDetailItem
-const createThemedStyles = (theme: ReturnType<typeof useAppTheme>) => StyleSheet.create({
-  safeAreaBase: {
-    flex: 1,
-    backgroundColor: theme.currentColors.background, 
-  },
-  scrollContainer: {
-    flexGrow: 1, 
-  },
+const styles = StyleSheet.create({
   container: {
-    padding: theme.spacing.lg,
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  scrollView: {
     flex: 1,
   },
-  centeredContainer: {
-    flex: 1,
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  
+  // Header Styles
+  headerGradient: {
+    paddingTop: 20,
+    paddingBottom: 40,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+  },
+  headerContent: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: theme.spacing.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  title: {
-    marginBottom: theme.spacing.sm,
-    textAlign: 'center',
-    color: theme.currentColors.textPrimary, 
+  avatarText: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
-  email: {
-    textAlign: 'center',
-    marginBottom: theme.spacing.xl,
+  statusDot: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#10B981',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
   },
-  detailsSectionCard: { 
-    padding: theme.spacing.lg,
-    marginBottom: theme.spacing.xl,
+  userName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 4,
   },
-  sectionHeaderContainer: {
+  userEmail: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    opacity: 0.9,
+    marginBottom: 20,
+  },
+  editButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: theme.spacing.md,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  sectionHeaderIcon: {
-    marginRight: theme.spacing.sm,
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#667eea',
+    marginLeft: 8,
+  },
+
+  // Stats Section
+  statsSection: {
+    paddingHorizontal: 24,
+    paddingTop: 30,
   },
   sectionTitle: {
-    paddingBottom: theme.spacing.xs,
-    color: theme.currentColors.primary, 
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 16,
   },
-  detailItemContainer: {
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  statCard: {
+    width: (width - 60) / 2,
+    marginBottom: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  statCardGradient: {
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  statIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+
+  // Section Styles
+  section: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  // Detail Item Styles
+  detailItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: theme.spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.currentColors.border, 
+    paddingVertical: 12,
   },
-  detailItemIcon: {
-    marginRight: theme.spacing.md,
+  detailItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
-  detailItemLabel: {
-    marginRight: theme.spacing.sm,
+  detailIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#667eea15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
   },
-  detailItemValue: {
-    flexShrink: 1,
-    textAlign: 'right',
+  detailLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
   },
-  logoutButtonContainer: {
-    marginTop: theme.spacing.xl,
+  detailValue: {
+    fontSize: 16,
+    color: '#1F2937',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginVertical: 8,
+  },
+
+  // Goals Styles
+  goalsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  goalChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#667eea15',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 8,
+  },
+  goalText: {
+    fontSize: 14,
+    color: '#667eea',
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+
+  // Logout Section
+  logoutSection: {
+    paddingHorizontal: 24,
+    paddingTop: 32,
+  },
+  logoutButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  logoutGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+  },
+  logoutText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#DC2626',
+    marginLeft: 8,
+  },
+
+  // Error State
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  errorTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  loginButton: {
+    backgroundColor: '#667eea',
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 25,
+  },
+  loginButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
 

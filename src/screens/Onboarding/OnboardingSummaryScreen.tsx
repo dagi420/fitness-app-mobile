@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  Alert,
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation/types';
@@ -14,6 +13,7 @@ import { useAuth } from '../../store/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { updateUserProfileOnboarding } from '../../api/authService';
 import { useNavigation } from '@react-navigation/native';
+import CustomAlert from '../../components/CustomAlert';
 
 type OnboardingSummaryScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -27,9 +27,26 @@ interface OnboardingSummaryScreenProps {
 const OnboardingSummaryScreen: React.FC<OnboardingSummaryScreenProps> = ({ navigation }) => {
   const { user, token, updateUserInContext, isAuthenticated } = useAuth();
   const rootNavigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const [alertInfo, setAlertInfo] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    buttons: any[];
+    iconName?: keyof typeof Ionicons.glyphMap;
+  }>({ visible: false, title: '', message: '', buttons: [] });
 
   // If user is authenticated and has a gender, they are editing, not doing initial onboarding
   const isProfileEditing = isAuthenticated && !!user?.profile?.gender;
+
+  const showAlert = (title: string, message: string, iconName?: keyof typeof Ionicons.glyphMap) => {
+    setAlertInfo({
+      visible: true,
+      title,
+      message,
+      buttons: [{ text: 'OK', onPress: () => {} }],
+      iconName,
+    });
+  };
 
   const handleComplete = async () => {
     // If just editing, simply navigate back to the profile screen.
@@ -40,11 +57,14 @@ const OnboardingSummaryScreen: React.FC<OnboardingSummaryScreenProps> = ({ navig
 
     // Otherwise, complete the initial onboarding flow.
     if (!user || !token) {
-      Alert.alert('Authentication Error', 'You must be logged in to continue.');
+      showAlert('Authentication Error', 'You must be logged in to continue.', 'alert-circle-outline');
       return;
     }
 
     try {
+      // For initial onboarding completion, we just mark it as complete
+      // without sending additional profile data since it should already be set
+      // from previous onboarding steps
       const response = await updateUserProfileOnboarding(
         user._id,
         { onboardingCompleted: true },
@@ -53,15 +73,22 @@ const OnboardingSummaryScreen: React.FC<OnboardingSummaryScreenProps> = ({ navig
 
       if (response.success && response.user) {
         await updateUserInContext(response.user);
+        // Navigate to the main app after successful onboarding completion
+        rootNavigation.reset({
+          index: 0,
+          routes: [{ name: 'MainApp' }],
+        });
       } else {
-        Alert.alert(
+        console.error('Onboarding completion failed:', response.message);
+        showAlert(
           'Finalization Failed',
-          response.message || 'Could not complete your setup. Please try again.'
+          response.message || 'Could not complete your setup. Please try again.',
+          'close-circle-outline'
         );
       }
     } catch (error) {
       console.error('Onboarding completion error:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      showAlert('Error', 'An unexpected error occurred. Please try again.', 'alert-circle-outline');
     }
   };
 
@@ -123,6 +150,15 @@ const OnboardingSummaryScreen: React.FC<OnboardingSummaryScreenProps> = ({ navig
           <Ionicons name="arrow-forward-outline" size={22} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
+      <CustomAlert
+        visible={alertInfo.visible}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+        iconName={alertInfo.iconName}
+        iconColor={alertInfo.iconName?.includes('alert') || alertInfo.iconName?.includes('close') ? '#FF6B6B' : '#01D38D'}
+        onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 };

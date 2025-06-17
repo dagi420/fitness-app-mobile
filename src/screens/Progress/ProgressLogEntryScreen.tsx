@@ -32,6 +32,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { API_BASE_URL } from '../../api/apiConfig';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import CustomAlert from '../../components/CustomAlert';
 
 type ProgressLogEntryScreenRouteProp = RouteProp<RootStackParamList, 'ProgressLogEntry'>;
 type ProgressLogEntryNavigationProp = StackNavigationProp<RootStackParamList, 'ProgressLogEntry'>;
@@ -76,6 +77,24 @@ const ProgressLogEntryScreen = () => {
   const [selectedPhotos, setSelectedPhotos] = useState<PhotoUpload[]>([]);
   const [existingPhotoUrls, setExistingPhotoUrls] = useState<string[]>(logToEdit?.photoUrls || []);
   const [isLoading, setIsLoading] = useState(false);
+  const [alertInfo, setAlertInfo] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    buttons: any[];
+    iconName?: keyof typeof Ionicons.glyphMap;
+    iconColor?: string;
+  }>({ visible: false, title: '', message: '', buttons: [] });
+
+  const showAlert = (
+    title: string,
+    message: string,
+    buttons: any[],
+    iconName?: keyof typeof Ionicons.glyphMap,
+    iconColor?: string,
+  ) => {
+    setAlertInfo({ visible: true, title, message, buttons, iconName, iconColor });
+  };
 
   const handleConfirmDate = (selectedDate: Date) => {
     setDatePickerVisibility(false);
@@ -89,7 +108,13 @@ const ProgressLogEntryScreen = () => {
   const requestPermissions = async () => {
     const { status: mediaLibraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (mediaLibraryStatus !== 'granted') {
-      Alert.alert("Permission Required", "Please grant access to your photo library.");
+      showAlert(
+        "Permission Required", 
+        "Please grant access to your photo library to add photos.",
+        [{ text: 'OK', onPress: () => {} }],
+        'alert-circle-outline',
+        '#FF9F0A'
+      );
       return false;
     }
     return true;
@@ -118,11 +143,16 @@ const ProgressLogEntryScreen = () => {
   };
   
   const showImageSourceOptions = () => {
-    Alert.alert("Add Photo", "Choose a source", [
+    showAlert(
+      "Add Photo",
+      "Choose a source for your progress picture.",
+      [
         { text: "Take Photo", onPress: () => pickImage('camera') },
         { text: "Choose from Library", onPress: () => pickImage('library') },
-        { text: "Cancel", style: "cancel" }
-    ]);
+        { text: "Cancel", type: 'destructive', onPress: () => {} },
+      ],
+      'image-outline'
+    );
   };
 
   const pickImage = async (source: 'camera' | 'library') => {
@@ -130,7 +160,13 @@ const ProgressLogEntryScreen = () => {
     
     const remainingSlots = MAX_PHOTOS - (existingPhotoUrls.length + selectedPhotos.length);
     if (remainingSlots <= 0) {
-      Alert.alert("Max Photos", `You can only upload up to ${MAX_PHOTOS} photos.`);
+      showAlert(
+        "Max Photos", 
+        `You can only upload up to ${MAX_PHOTOS} photos.`,
+        [{ text: 'OK', onPress: () => {} }],
+        'warning-outline',
+        '#FF9F0A'
+      );
       return;
     }
 
@@ -161,7 +197,13 @@ const ProgressLogEntryScreen = () => {
         }
     } catch (error) {
         console.error("Image picking error:", error);
-        Alert.alert("Error", "Could not process image. Please try again.");
+        showAlert(
+          "Error", 
+          "Could not process the selected image. Please try again.",
+          [{ text: 'OK', onPress: () => {} }],
+          'alert-circle-outline',
+          '#FF6B6B'
+        );
     }
   };
 
@@ -175,7 +217,13 @@ const ProgressLogEntryScreen = () => {
 
   const handleSubmit = async () => {
     if (!user || !token || !weightKg.trim()) {
-      Alert.alert('Missing Info', 'Weight is required.');
+      showAlert(
+        'Missing Info', 
+        'Weight is a required field. Please enter your current weight to save the log.',
+        [{ text: 'OK', onPress: () => {} }],
+        'alert-circle-outline',
+        '#FF9F0A'
+      );
       return;
     }
     
@@ -207,12 +255,23 @@ const ProgressLogEntryScreen = () => {
         await uploadProgressPhotos(token, logId, selectedPhotos);
       }
       
-      Alert.alert('Success', `Progress log ${logToEdit ? 'updated' : 'saved'}!`);
-      navigation.goBack();
+      showAlert(
+        'Success', 
+        `Progress log ${logToEdit ? 'updated' : 'saved'}!`,
+        [{ text: 'Great!', onPress: () => navigation.goBack() }],
+        'checkmark-circle-outline',
+        '#01D38D'
+      );
 
     } catch (error) {
       console.error("Submit error:", error);
-      Alert.alert('Error', error instanceof Error ? error.message : "An unexpected error occurred.");
+      showAlert(
+        'Error', 
+        error instanceof Error ? error.message : "An unexpected error occurred while saving.",
+        [{ text: 'OK', onPress: () => {} }],
+        'alert-circle-outline',
+        '#FF6B6B'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -323,6 +382,15 @@ const ProgressLogEntryScreen = () => {
                 {isLoading ? <ActivityIndicator color="#191E29" /> : <Text style={styles.saveButtonText}>Save Progress</Text>}
             </TouchableOpacity>
         </View>
+        <CustomAlert
+            visible={alertInfo.visible}
+            title={alertInfo.title}
+            message={alertInfo.message}
+            buttons={alertInfo.buttons}
+            iconName={alertInfo.iconName}
+            iconColor={alertInfo.iconColor}
+            onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
+       />
     </SafeAreaView>
   );
 };

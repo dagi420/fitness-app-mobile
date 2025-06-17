@@ -5,6 +5,8 @@ import { RootStackParamList } from '../../navigation/types';
 import { loginUser } from '../../api/authService';
 import { useAuth } from '../../store/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import CustomAlert from '../../components/CustomAlert';
+import { Ionicons } from '@expo/vector-icons';
 
 type LoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
@@ -17,10 +19,27 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login: loginToContext } = useAuth();
+  const [alertInfo, setAlertInfo] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    buttons: any[];
+    iconName?: keyof typeof Ionicons.glyphMap;
+  }>({ visible: false, title: '', message: '', buttons: [] });
+
+  const showAlert = (title: string, message: string, iconName?: keyof typeof Ionicons.glyphMap) => {
+    setAlertInfo({
+      visible: true,
+      title,
+      message,
+      buttons: [{ text: 'OK', onPress: () => {} }],
+      iconName,
+    });
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password.');
+      showAlert('Login Error', 'Please enter both email and password.', 'alert-circle-outline');
       return;
     }
     setIsLoading(true);
@@ -32,14 +51,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         if (response.user.profile && response.user.profile.gender) {
             navigation.replace('MainApp');
         } else {
-            navigation.replace('Onboarding');
+            navigation.replace('GenderSelection');
         }
 
       } else {
-        Alert.alert('Login Failed', response.message || 'Invalid credentials or server error.');
+        showAlert('Login Failed', response.message || 'Invalid credentials or server error.', 'close-circle-outline');
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      showAlert('Error', 'An unexpected error occurred. Please try again.', 'alert-circle-outline');
       console.error('Login screen error:', error);
     }
     setIsLoading(false);
@@ -98,6 +117,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </View>
+      <CustomAlert
+        visible={alertInfo.visible}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+        iconName={alertInfo.iconName}
+        iconColor={'#FF6B6B'}
+        onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
+      />
     </LinearGradient>
   );
 };

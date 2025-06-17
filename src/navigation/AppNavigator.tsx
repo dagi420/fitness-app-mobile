@@ -230,7 +230,6 @@ const AppNavigator = () => {
                 <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
                 <Stack.Screen name="ActivityLevel" component={ActivityLevelScreen} />
                 <Stack.Screen name="OnboardingSummary" component={OnboardingSummaryScreen} />
-                <Stack.Screen name="Onboarding" component={GoalSelectionScreen} options={{ headerShown: true, title: 'Your Goals'}}/>
               </>
             )}
           </>

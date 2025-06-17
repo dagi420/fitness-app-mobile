@@ -11,11 +11,14 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  StatusBar,
 } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/types';
 import { API_BASE_URL } from '../../api/apiConfig';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Ionicons } from '@expo/vector-icons';
+import CustomAlert from '../../components/CustomAlert';
 
 type PhotoViewerScreenRouteProp = RouteProp<RootStackParamList, 'PhotoViewer'>;
 
@@ -30,6 +33,23 @@ const PhotoViewerScreen = () => {
   const [viewMode, setViewMode] = useState<'single' | 'comparison'>('single');
   const [comparisonIndex, setComparisonIndex] = useState<number | null>(null);
   const [imageLoadErrors, setImageLoadErrors] = useState<Record<string, boolean>>({});
+  const [alertInfo, setAlertInfo] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    buttons: any[];
+    iconName?: keyof typeof Ionicons.glyphMap;
+  }>({ visible: false, title: '', message: '', buttons: [] });
+
+  const showAlert = (title: string, message: string) => {
+    setAlertInfo({
+      visible: true,
+      title,
+      message,
+      buttons: [{ text: 'OK', onPress: () => {} }],
+      iconName: 'alert-circle-outline',
+    });
+  };
 
   const getImageUri = (photoUrl: string): string => {
     if (!photoUrl) return '';
@@ -44,7 +64,7 @@ const PhotoViewerScreen = () => {
   const handleImageError = (photoUrl: string) => {
     setIsLoading(false);
     setImageLoadErrors(prev => ({ ...prev, [photoUrl]: true }));
-    Alert.alert('Error', 'Failed to load image');
+    showAlert('Image Error', 'Failed to load the selected image. Please check your connection or try again.');
   };
 
   const renderFullScreenPhoto = (photoUrl: string) => {
@@ -54,7 +74,7 @@ const PhotoViewerScreen = () => {
     if (imageLoadErrors[photoUrl]) {
       return (
         <View style={styles.errorContainer}>
-          <Icon name="image-off" size={48} color="#666" />
+          <Ionicons name="image-outline" size={60} color="#696E79" />
           <Text style={styles.errorText}>Failed to load image</Text>
         </View>
       );
@@ -65,8 +85,8 @@ const PhotoViewerScreen = () => {
         {isLoading && (
           <ActivityIndicator 
             size="large" 
-            color="#007AFF" 
-            style={styles.loader}
+            color="#01D38D" 
+            style={StyleSheet.absoluteFill}
           />
         )}
         <Image
@@ -90,12 +110,16 @@ const PhotoViewerScreen = () => {
       <View style={styles.comparisonContainer}>
         <View style={styles.comparisonHalf}>
           {renderFullScreenPhoto(photoUrls[selectedPhotoIndex])}
-          <Text style={styles.comparisonLabel}>Current</Text>
+          <Text style={styles.comparisonLabel}>
+            {photoUrls[selectedPhotoIndex] ? new Date(logDate).toLocaleDateString() : 'Current'}
+          </Text>
         </View>
         <View style={styles.comparisonDivider} />
         <View style={styles.comparisonHalf}>
           {renderFullScreenPhoto(photoUrls[comparisonIndex])}
-          <Text style={styles.comparisonLabel}>Compare</Text>
+          <Text style={styles.comparisonLabel}>
+            {photoUrls[comparisonIndex] ? 'Comparison' : 'Compare'}
+          </Text>
         </View>
       </View>
     );
@@ -105,10 +129,15 @@ const PhotoViewerScreen = () => {
     if (!photoUrl) return null;
     const imageUri = getImageUri(photoUrl);
     const isSelected = index === selectedPhotoIndex || index === comparisonIndex;
+    const isComparisonTarget = index === comparisonIndex;
 
     return (
       <TouchableOpacity
-        style={[styles.thumbnailContainer, isSelected && styles.selectedThumbnail]}
+        style={[
+            styles.thumbnailContainer, 
+            isSelected && styles.selectedThumbnail,
+            isComparisonTarget && styles.comparisonThumbnail
+        ]}
         onPress={() => {
           if (viewMode === 'comparison' && selectedPhotoIndex !== index) {
             setComparisonIndex(index);
@@ -130,10 +159,15 @@ const PhotoViewerScreen = () => {
           resizeMode="cover"
           onError={() => handleImageError(photoUrl)}
         />
-        {isSelected && (
+        {isSelected && !isComparisonTarget &&(
           <View style={styles.selectedOverlay}>
-            <Icon name="check-circle" size={24} color="#fff" />
+            <Ionicons name="eye-outline" size={24} color="#FFF" />
           </View>
+        )}
+        {isComparisonTarget && (
+            <View style={[styles.selectedOverlay, styles.comparisonOverlay]}>
+                <Ionicons name="git-compare-outline" size={24} color="#FFF" />
+            </View>
         )}
       </TouchableOpacity>
     );
@@ -142,15 +176,18 @@ const PhotoViewerScreen = () => {
   if (!photoUrls.length) {
     return (
       <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="light-content" />
         <View style={styles.container}>
           <View style={styles.header}>
-            <Text style={styles.title}>
-              {logDate ? new Date(logDate).toLocaleDateString() : 'Progress Photos'}
-            </Text>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Progress Photos</Text>
+            <View style={{width: 24}}/>
           </View>
           <View style={styles.emptyContainer}>
-            <Icon name="image-off" size={48} color="#666" />
-            <Text style={styles.emptyText}>No photos available</Text>
+            <Ionicons name="images-outline" size={80} color="#2A2D32" />
+            <Text style={styles.emptyText}>No photos for this log</Text>
           </View>
         </View>
       </SafeAreaView>
@@ -159,29 +196,16 @@ const PhotoViewerScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" />
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>
-            {logDate ? new Date(logDate).toLocaleDateString() : 'Progress Photos'}
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            {logDate ? new Date(logDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Photos'}
           </Text>
-          {photoUrls.length > 1 && (
-            <TouchableOpacity
-              style={styles.modeButton}
-              onPress={() => {
-                setViewMode(viewMode === 'single' ? 'comparison' : 'single');
-                setComparisonIndex(null);
-              }}
-            >
-              <Icon
-                name={viewMode === 'single' ? 'compare' : 'image'}
-                size={24}
-                color="#007AFF"
-              />
-              <Text style={styles.modeButtonText}>
-                {viewMode === 'single' ? 'Compare' : 'Single View'}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <View style={{width: 24}}/>
         </View>
 
         <View style={styles.mainContent}>
@@ -194,11 +218,29 @@ const PhotoViewerScreen = () => {
 
         {photoUrls.length > 1 && (
           <View style={styles.thumbnailSection}>
-            <Text style={styles.thumbnailTitle}>
-              {viewMode === 'comparison' 
-                ? 'Select photos to compare' 
-                : 'All photos'}
-            </Text>
+            <View style={styles.thumbnailHeader}>
+              <Text style={styles.thumbnailTitle}>
+                {viewMode === 'comparison' 
+                  ? 'Select photos to compare' 
+                  : 'All photos'}
+              </Text>
+              <TouchableOpacity
+                style={styles.modeButton}
+                onPress={() => {
+                  setViewMode(viewMode === 'single' ? 'comparison' : 'single');
+                  setComparisonIndex(null);
+                }}
+              >
+                <Ionicons
+                  name={viewMode === 'single' ? 'git-compare-outline' : 'image-outline'}
+                  size={22}
+                  color="#01D38D"
+                />
+                <Text style={styles.modeButtonText}>
+                  {viewMode === 'single' ? 'Compare' : 'Single View'}
+                </Text>
+              </TouchableOpacity>
+            </View>
             <FlatList
               data={photoUrls}
               renderItem={renderThumbnail}
@@ -210,6 +252,15 @@ const PhotoViewerScreen = () => {
           </View>
         )}
       </View>
+      <CustomAlert
+        visible={alertInfo.visible}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+        iconName={alertInfo.iconName}
+        iconColor="#FF6B6B"
+        onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 };
@@ -217,83 +268,57 @@ const PhotoViewerScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f0f0f5',
+    backgroundColor: '#191E29',
   },
   container: {
     flex: 1,
+    backgroundColor: '#191E29',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    backgroundColor: '#1E2328',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#2A2D32'
   },
-  title: {
+  backButton: {
+    marginRight: 15,
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
-  },
-  modeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-  },
-  modeButtonText: {
-    marginLeft: 8,
-    color: '#007AFF',
-    fontSize: 16,
+    color: '#FFFFFF',
   },
   mainContent: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#12151C',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   fullScreenContainer: {
-    flex: 1,
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
   fullScreenImage: {
-    width: width,
-    height: height * 0.6,
+    width: '100%',
+    height: '100%',
   },
-  loader: {
-    position: 'absolute',
-    zIndex: 1,
-  },
-  thumbnailSection: {
-    padding: 16,
-    backgroundColor: '#fff',
-  },
-  thumbnailTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  thumbnailList: {
-    paddingVertical: 8,
-  },
-  thumbnailContainer: {
-    marginRight: 12,
-    borderRadius: 8,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  selectedThumbnail: {
-    borderColor: '#007AFF',
-  },
-  thumbnail: {
-    width: 80,
-    height: 80,
-  },
-  selectedOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,122,255,0.3)',
+  errorContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+    width: '100%',
+    height: '100%',
+  },
+  errorText: {
+    color: '#A0A5B1',
+    marginTop: 10,
+    fontSize: 16,
   },
   comparisonContainer: {
     flex: 1,
@@ -301,46 +326,99 @@ const styles = StyleSheet.create({
   },
   comparisonHalf: {
     flex: 1,
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   comparisonDivider: {
     width: 2,
-    backgroundColor: '#fff',
+    backgroundColor: '#01D38D',
   },
   comparisonLabel: {
     position: 'absolute',
-    bottom: 16,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingVertical: 4,
+    bottom: 20,
+    left: 20,
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
-  errorContainer: {
-    flex: 1,
+  thumbnailSection: {
+    paddingVertical: 15,
+    backgroundColor: '#1E2328',
+    borderTopWidth: 1,
+    borderTopColor: '#2A2D32'
+  },
+  thumbnailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 15,
+  },
+  thumbnailTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  modeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#01D38D20',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+  },
+  modeButtonText: {
+    color: '#01D38D',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  thumbnailList: {
+    paddingHorizontal: 20,
+  },
+  thumbnailContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    marginRight: 10,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    overflow: 'hidden',
+  },
+  thumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  selectedThumbnail: {
+    borderColor: '#01D38D',
+  },
+  comparisonThumbnail: {
+    borderColor: '#FF9F0A',
+  },
+  selectedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(1, 211, 141, 0.4)',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f8f8',
   },
-  errorText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+  comparisonOverlay: {
+    backgroundColor: 'rgba(255, 159, 10, 0.4)',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f8f8',
   },
   emptyText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginTop: 20,
   },
 });
 

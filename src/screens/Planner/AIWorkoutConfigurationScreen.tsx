@@ -7,7 +7,6 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   StatusBar,
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -16,6 +15,7 @@ import { RootStackParamList, AIWorkoutConfigData } from '../../navigation/types'
 import { useAuth } from '../../store/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
+import CustomAlert from '../../components/CustomAlert';
 
 type AIWorkoutConfigurationScreenNavigationProp = StackNavigationProp<RootStackParamList, 'AIWorkoutConfigurationScreen'>;
 type AIWorkoutConfigurationScreenRouteProp = RouteProp<RootStackParamList, 'AIWorkoutConfigurationScreen'>;
@@ -88,6 +88,18 @@ const AIWorkoutConfigurationScreen = () => {
   const [timePerSession, setTimePerSession] = useState(45);
   const [workoutsPerWeek, setWorkoutsPerWeek] = useState(3);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [alertInfo, setAlertInfo] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    buttons: any[];
+    iconName?: keyof typeof Ionicons.glyphMap;
+    iconColor?: string;
+  }>({ visible: false, title: '', message: '', buttons: [] });
+
+  const showAlert = (title: string, message: string, buttons: any[], iconName?: keyof typeof Ionicons.glyphMap, iconColor?: string) => {
+    setAlertInfo({ visible: true, title, message, buttons, iconName, iconColor });
+  };
 
   const handleEquipmentToggle = (value: string) => {
     setSelectedEquipment(prev => {
@@ -108,7 +120,7 @@ const AIWorkoutConfigurationScreen = () => {
 
   const handleSubmit = async () => {
     if (!fitnessGoal || !fitnessLevel || !workoutType || selectedEquipment.length === 0) {
-      Alert.alert('Missing Information', 'Please fill in all fields');
+      showAlert('Missing Information', 'Please fill in all fields', [{ text: 'OK' }], 'alert-circle-outline', '#FF9F0A');
       return;
     }
 
@@ -127,7 +139,7 @@ const AIWorkoutConfigurationScreen = () => {
       await route.params.onSubmit(config);
     } catch (error) {
       console.error('Error submitting workout configuration:', error);
-      Alert.alert('Error', 'An error occurred while generating your workout plan. Please try again.');
+      showAlert('Error', 'An error occurred while generating your workout plan. Please try again.', [{ text: 'OK' }], 'alert-circle-outline', '#FF6B6B');
     } finally {
       setIsSubmitting(false);
     }
@@ -197,6 +209,15 @@ const AIWorkoutConfigurationScreen = () => {
                 )}
             </TouchableOpacity>
         </View>
+        <CustomAlert
+            visible={alertInfo.visible}
+            title={alertInfo.title}
+            message={alertInfo.message}
+            buttons={alertInfo.buttons}
+            iconName={alertInfo.iconName}
+            iconColor={alertInfo.iconColor}
+            onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
+        />
     </SafeAreaView>
   );
 };

@@ -7,7 +7,6 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   Image,
   StatusBar,
 } from 'react-native';
@@ -19,6 +18,7 @@ import { fetchUserProgressLogs, ProgressLog, deleteProgressLog } from '../../api
 import { Calendar, DateData } from 'react-native-calendars';
 import { API_BASE_URL } from '../../api/apiConfig';
 import { Ionicons } from '@expo/vector-icons';
+import CustomAlert from '../../components/CustomAlert';
 
 type ProgressHistoryNavigationProp = StackNavigationProp<RootStackParamList, 'ProgressHistory'>;
 
@@ -48,6 +48,24 @@ const ProgressHistoryScreen = () => {
   const [filteredLogs, setFilteredLogs] = useState<ProgressLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [alertInfo, setAlertInfo] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    buttons: any[];
+    iconName?: keyof typeof Ionicons.glyphMap;
+    iconColor?: string;
+  }>({ visible: false, title: '', message: '', buttons: [] });
+
+  const showAlert = (
+    title: string,
+    message: string,
+    buttons: any[],
+    iconName?: keyof typeof Ionicons.glyphMap,
+    iconColor?: string,
+  ) => {
+    setAlertInfo({ visible: true, title, message, buttons, iconName, iconColor });
+  };
 
   const loadProgressLogs = useCallback(async () => {
     if (!user || !token) return;
@@ -100,21 +118,36 @@ const ProgressHistoryScreen = () => {
 
   const handleDeleteLog = (logId: string) => {
     if (!token) return;
-    Alert.alert("Confirm Delete", "Are you sure you want to delete this log?", [
-        { text: "Cancel", style: "cancel" },
-        {
-            text: "Delete", style: "destructive", 
-            onPress: async () => {
-                const response = await deleteProgressLog(token, logId);
-                if (response.success) {
-                    Alert.alert("Success", "Log deleted.");
-                    loadProgressLogs(); 
-                } else {
-                    Alert.alert("Error", response.message || "Failed to delete log.");
-                }
+    showAlert(
+      "Confirm Delete",
+      "Are you sure you want to delete this log? This action cannot be undone.",
+      [
+        { text: "Cancel", onPress: () => {}, type: 'default' },
+        { text: "Delete", type: 'destructive', onPress: async () => {
+            const response = await deleteProgressLog(token, logId);
+            if (response.success) {
+                showAlert(
+                  "Success", 
+                  "Log deleted.",
+                  [{ text: 'OK', onPress: () => {} }],
+                  'checkmark-circle-outline',
+                  '#01D38D'
+                );
+                loadProgressLogs(); 
+            } else {
+                showAlert(
+                  "Error", 
+                  response.message || "Failed to delete log.",
+                  [{ text: 'OK', onPress: () => {} }],
+                  'alert-circle-outline',
+                  '#FF6B6B'
+                );
             }
-        }
-    ]);
+        }}
+      ],
+      'trash-outline',
+      '#FF6B6B'
+    )
   };
   
   const renderLogItem = ({ item }: { item: ProgressLog }) => (
@@ -186,6 +219,15 @@ const ProgressHistoryScreen = () => {
       >
         <Ionicons name="add" size={32} color="#191E29" />
       </TouchableOpacity>
+      <CustomAlert
+        visible={alertInfo.visible}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+        iconName={alertInfo.iconName}
+        iconColor={alertInfo.iconColor}
+        onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 };

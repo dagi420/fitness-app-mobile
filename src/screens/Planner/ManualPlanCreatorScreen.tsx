@@ -21,6 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DraggableFlatList, {
   RenderItemParams,
 } from 'react-native-draggable-flatlist';
+import CustomAlert from '../../components/CustomAlert';
 
 // Define Prop types for this screen
 type ManualPlanCreatorNavigationProp = StackNavigationProp<RootStackParamList, 'ManualPlanCreator'>;
@@ -59,6 +60,18 @@ const ManualPlanCreatorScreen = () => {
   const [planName, setPlanName] = useState('');
   const [exercisesInPlan, setExercisesInPlan] = useState<PlannedExercise[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [alertInfo, setAlertInfo] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    buttons: any[];
+    iconName?: keyof typeof Ionicons.glyphMap;
+    iconColor?: string;
+  }>({ visible: false, title: '', message: '', buttons: [] });
+
+  const showAlert = (title: string, message: string, buttons: any[], iconName?: keyof typeof Ionicons.glyphMap, iconColor?: string) => {
+    setAlertInfo({ visible: true, title, message, buttons, iconName, iconColor });
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -90,15 +103,15 @@ const ManualPlanCreatorScreen = () => {
 
   const handleSavePlan = async () => {
     if (!planName.trim()) {
-      Alert.alert('Missing Name', 'Please give your workout plan a name.');
+      showAlert('Missing Name', 'Please give your workout plan a name.', [{ text: 'OK' }], 'alert-circle-outline', '#FF9F0A');
       return;
     }
     if (exercisesInPlan.length === 0) {
-      Alert.alert('No Exercises', 'Please add at least one exercise to your plan.');
+      showAlert('No Exercises', 'Please add at least one exercise to your plan.', [{ text: 'OK' }], 'alert-circle-outline', '#FF9F0A');
       return;
     }
     if (!user || !token) {
-      Alert.alert('Error', 'User not authenticated. Please login again.');
+      showAlert('Error', 'User not authenticated. Please login again.', [{ text: 'OK' }], 'alert-circle-outline', '#FF6B6B');
       return;
     }
 
@@ -111,14 +124,13 @@ const ManualPlanCreatorScreen = () => {
       });
 
       if (response.success && response.plan) {
-        Alert.alert('Success!', `Successfully saved ${response.plan.planName}.`);
-        navigation.goBack();
+        showAlert('Success!', `Successfully saved ${response.plan.planName}.`, [{ text: 'Great!', onPress: () => navigation.goBack() }], 'checkmark-circle-outline', '#01D38D');
       } else {
-        Alert.alert('Save Failed', response.message || 'Could not save the plan.');
+        showAlert('Save Failed', response.message || 'Could not save the plan.', [{ text: 'OK' }], 'close-circle-outline', '#FF6B6B');
       }
     } catch (error) {
       console.error('handleSavePlan error:', error);
-      Alert.alert('Error', 'An unexpected error occurred while saving.');
+      showAlert('Error', 'An unexpected error occurred while saving.', [{ text: 'OK' }], 'alert-circle-outline', '#FF6B6B');
     } finally {
       setIsLoading(false);
     }
@@ -228,6 +240,15 @@ const ManualPlanCreatorScreen = () => {
             )}
         </TouchableOpacity>
       </View>
+      <CustomAlert
+        visible={alertInfo.visible}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+        iconName={alertInfo.iconName}
+        iconColor={alertInfo.iconColor}
+        onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 };

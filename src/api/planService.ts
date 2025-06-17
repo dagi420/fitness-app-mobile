@@ -92,4 +92,35 @@ export const fetchUserWorkoutPlans = async (
     const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
     return { success: false, message: errorMessage };
   }
+};
+
+interface DeleteWorkoutPlanResponse {
+  success: boolean;
+  message: string;
+}
+
+export const deleteUserWorkoutPlan = async (
+  token: string,
+  planId: string
+): Promise<DeleteWorkoutPlanResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/workout-plans/${planId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    const data: DeleteWorkoutPlanResponse = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to delete workout plan');
+    }
+    return data;
+  } catch (error) {
+    console.error('Delete workout plan API error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
+    return { success: false, message: errorMessage };
+  }
 }; 

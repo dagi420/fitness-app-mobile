@@ -4,6 +4,8 @@ import { NavigationProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/types';
 import { registerUser } from '../../api/authService'; // Import the service
 import { LinearGradient } from 'expo-linear-gradient';
+import CustomAlert from '../../components/CustomAlert';
+import { Ionicons } from '@expo/vector-icons';
 
 type SignupScreenNavigationProp = NavigationProp<RootStackParamList, 'Signup'>;
 
@@ -17,14 +19,42 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [alertInfo, setAlertInfo] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    buttons: any[];
+    iconName?: keyof typeof Ionicons.glyphMap;
+    iconColor?: string;
+  }>({ visible: false, title: '', message: '', buttons: [] });
+
+  const showAlert = (
+    title: string,
+    message: string,
+    buttons: any[],
+    iconName?: keyof typeof Ionicons.glyphMap,
+    iconColor?: string,
+  ) => {
+    setAlertInfo({ visible: true, title, message, buttons, iconName, iconColor });
+  };
 
   const handleSignup = async () => {
     if (!fullName || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields.');
+      showAlert(
+        'Missing Fields', 
+        'Please fill in all fields to create your account.', 
+        [{ text: 'OK', onPress: () => {} }], 
+        'alert-circle-outline', 
+        '#FF9F0A');
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match.');
+      showAlert(
+        'Password Mismatch', 
+        'The passwords you entered do not match. Please re-enter them.', 
+        [{ text: 'OK', onPress: () => {} }], 
+        'alert-circle-outline', 
+        '#FF9F0A');
       return;
     }
 
@@ -32,17 +62,30 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
     try {
       const response = await registerUser({ fullName, email, password });
       if (response.success) {
-        Alert.alert('Success', 'Registration successful! Please login.');
-        // Optionally, store token if returned and navigate to a different screen
-        // e.g., navigation.replace('MainApp'); or navigation.navigate('Login');
-        navigation.navigate('Login'); 
+        showAlert(
+            'Account Created!', 
+            'Welcome aboard! Please sign in to start setting up your personalized fitness profile.', 
+            [{ text: 'Sign In', onPress: () => navigation.navigate('Login') }],
+            'checkmark-circle-outline',
+            '#01D38D'
+        );
       } else {
-        Alert.alert('Registration Failed', response.message || 'An unknown error occurred.');
+        showAlert(
+            'Registration Failed', 
+            response.message || 'An unknown error occurred.',
+            [{ text: 'OK', onPress: () => {} }],
+            'close-circle-outline',
+            '#FF6B6B'
+        );
       }
     } catch (error) {
-      // This catch block might be redundant if authService already handles it,
-      // but good for unforeseen issues.
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      showAlert(
+        'Error', 
+        'An unexpected error occurred. Please try again.', 
+        [{ text: 'OK', onPress: () => {} }],
+        'alert-circle-outline',
+        '#FF6B6B'
+      );
       console.error('Signup screen error:', error);
     }
     setIsLoading(false);
@@ -109,6 +152,15 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </View>
+      <CustomAlert
+        visible={alertInfo.visible}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+        iconName={alertInfo.iconName}
+        iconColor={alertInfo.iconColor}
+        onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
+      />
     </LinearGradient>
   );
 };

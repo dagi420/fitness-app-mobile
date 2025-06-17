@@ -15,6 +15,8 @@ import { RootStackParamList } from '../../navigation/types';
 import { useAuth } from '../../store/AuthContext';
 import { updateUserProfileOnboarding, OnboardingProfileData } from '../../api/authService';
 import { Ionicons } from '@expo/vector-icons';
+import CustomAlert from '../../components/CustomAlert';
+import { CommonActions } from '@react-navigation/native';
 
 type GoalSelectionScreenNavigationProp = StackNavigationProp<RootStackParamList, 'GoalSelection'>;
 
@@ -32,9 +34,47 @@ const GOALS = [
 ];
 
 const GoalSelectionScreen: React.FC<GoalSelectionScreenProps> = ({ navigation }) => {
-  const { user, token, updateUserInContext } = useAuth();
+  const { user, token, updateUserInContext, isAuthenticated } = useAuth();
   const [selectedGoals, setSelectedGoals] = useState<string[]>(user?.profile?.workoutGoals || []);
   const [isLoading, setIsLoading] = useState(false);
+  const [alertInfo, setAlertInfo] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    buttons: any[];
+    iconName?: keyof typeof Ionicons.glyphMap;
+  }>({ visible: false, title: '', message: '', buttons: [] });
+
+  // Check if this is profile editing (user already authenticated and has profile) or initial onboarding
+  const isProfileEditing = isAuthenticated && !!user?.profile?.gender;
+
+  const showAlert = (title: string, message: string, iconName?: keyof typeof Ionicons.glyphMap) => {
+    setAlertInfo({
+      visible: true,
+      title,
+      message,
+      buttons: [{ text: 'OK', onPress: () => {} }],
+      iconName,
+    });
+  };
+
+  const handleBackPress = () => {
+    if (isProfileEditing) {
+      // If editing profile, go back to profile
+      navigation.goBack();
+    } else if (navigation.canGoBack()) {
+      // If there's a previous screen, go back
+      navigation.goBack();
+    } else {
+      // If no previous screen (fallback), go to Welcome
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Welcome' }],
+        })
+      );
+    }
+  };
 
   const toggleGoal = (goalId: string) => {
     setSelectedGoals(prev =>
@@ -44,11 +84,11 @@ const GoalSelectionScreen: React.FC<GoalSelectionScreenProps> = ({ navigation })
 
   const handleNext = async () => {
     if (selectedGoals.length === 0) {
-      Alert.alert('Select Your Goals', 'Please choose at least one goal to proceed.');
+      showAlert('Select Your Goals', 'Please choose at least one goal to proceed.', 'alert-circle-outline');
       return;
     }
     if (!user || !token) {
-      Alert.alert('Authentication Error', 'You must be logged in to continue.');
+      showAlert('Authentication Error', 'You must be logged in to continue.', 'alert-circle-outline');
       return;
     }
     setIsLoading(true);
@@ -59,10 +99,10 @@ const GoalSelectionScreen: React.FC<GoalSelectionScreenProps> = ({ navigation })
         await updateUserInContext(response.user);
         navigation.navigate('UserDetails');
       } else {
-        Alert.alert('Update Failed', response.message || 'Could not save your goals.');
+        showAlert('Update Failed', response.message || 'Could not save your goals.', 'close-circle-outline');
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred.');
+      showAlert('Error', 'An unexpected error occurred.', 'alert-circle-outline');
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +111,7 @@ const GoalSelectionScreen: React.FC<GoalSelectionScreenProps> = ({ navigation })
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+      <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
         <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
       </TouchableOpacity>
 
@@ -109,6 +149,15 @@ const GoalSelectionScreen: React.FC<GoalSelectionScreenProps> = ({ navigation })
           {isLoading ? <ActivityIndicator color="#191E29" /> : <Text style={styles.nextButtonText}>Next</Text>}
         </TouchableOpacity>
       </View>
+      <CustomAlert
+        visible={alertInfo.visible}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+        iconName={alertInfo.iconName}
+        iconColor={alertInfo.iconName?.includes('alert') || alertInfo.iconName?.includes('close') ? '#FF6B6B' : '#01D38D'}
+        onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 };

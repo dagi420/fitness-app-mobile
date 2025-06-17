@@ -173,4 +173,42 @@ export const generateAIDietPlan = async (
     const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during AI plan generation.';
     return { success: false, message: errorMessage };
   }
+};
+
+// --- Interface for Search Food Items Response ---
+interface SearchFoodItemsResponse {
+  success: boolean;
+  foodItems?: FoodItem[];
+  message?: string;
+}
+
+/**
+ * Searches for food items based on a search term
+ */
+export const searchFoodItems = async (
+  searchTerm: string
+): Promise<SearchFoodItemsResponse> => {
+  if (!searchTerm.trim()) {
+    return { success: false, message: 'Search term is required.' };
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/food/search?q=${encodeURIComponent(searchTerm)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data: SearchFoodItemsResponse = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to search food items');
+    }
+    return data;
+  } catch (error) {
+    console.error('Search food items API error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
+    return { success: false, message: errorMessage };
+  }
 }; 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   ScrollView,
@@ -11,9 +11,10 @@ import {
 } from 'react-native';
 import { useAuth } from '../../store/AuthContext';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
+import CustomAlert from '../../components/CustomAlert';
 
 type ProfileScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Profile'>;
 
@@ -44,19 +45,38 @@ const DetailItem = ({
 const ProfileScreen = () => {
   const { user, logout } = useAuth();
   const navigation = useNavigation<ProfileScreenNavigationProp>();
+  const [alertInfo, setAlertInfo] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    buttons: any[];
+    iconName?: keyof typeof Ionicons.glyphMap;
+  }>({ visible: false, title: '', message: '', buttons: [] });
 
   const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          // The AppNavigator will handle redirecting to the auth flow
+    setAlertInfo({
+      visible: true,
+      title: 'Logout',
+      message: 'Are you sure you want to logout?',
+      iconName: 'log-out-outline',
+      buttons: [
+        { text: 'Cancel', onPress: () => {}, type: 'default' },
+        {
+          text: 'Logout',
+          type: 'destructive',
+          onPress: async () => {
+            await logout();
+            // Reset navigation stack to Welcome screen
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [{ name: 'Welcome' }],
+              })
+            );
+          },
         },
-      },
-    ]);
+      ]
+    })
   };
 
   if (!user) {
@@ -196,6 +216,15 @@ const ProfileScreen = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      <CustomAlert
+        visible={alertInfo.visible}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+        iconName={alertInfo.iconName}
+        iconColor="#FF6B6B"
+        onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 };

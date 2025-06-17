@@ -20,6 +20,7 @@ import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedCircularProgress } from 'react-native-circular-progress';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import CustomAlert from '../../components/CustomAlert';
 
 type ActiveWorkoutScreenRouteProp = RouteProp<RootStackParamList, 'ActiveWorkout'>;
 type ActiveWorkoutScreenNavigationProp = StackNavigationProp<RootStackParamList, 'ActiveWorkout'>;
@@ -91,6 +92,18 @@ const ActiveWorkoutScreen = () => {
   const totalDuration = useRef(3);
   
   const [isInfoModalVisible, setIsInfoModalVisible] = useState(false);
+  const [alertInfo, setAlertInfo] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    buttons: any[];
+    iconName?: keyof typeof Ionicons.glyphMap;
+    iconColor?: string;
+  }>({ visible: false, title: '', message: '', buttons: [] });
+
+  const showAlert = (title: string, message: string, buttons: any[], iconName?: keyof typeof Ionicons.glyphMap, iconColor?: string) => {
+    setAlertInfo({ visible: true, title, message, buttons, iconName, iconColor });
+  };
 
   const currentExercise = useMemo(
     () => plan.exercises[currentExerciseIndex] as PlannedExercise,
@@ -203,18 +216,15 @@ const ActiveWorkoutScreen = () => {
 
   const handleExitWorkout = () => {
     setIsTimerRunning(false);
-    Alert.alert(
+    showAlert(
       "End Workout",
       "Are you sure you want to quit this workout?",
       [
-        { text: "Resume", style: "cancel", onPress: handlePlayPress },
-        {
-          text: "End Workout",
-          style: "destructive",
-          onPress: () => navigation.popToTop(),
-        },
+        { text: "Resume", onPress: handlePlayPress, type: 'cancel' },
+        { text: "End Workout", onPress: () => navigation.popToTop(), type: 'destructive' },
       ],
-      { cancelable: false }
+      'alert-circle-outline',
+      '#FF9F0A'
     );
   };
   
@@ -232,7 +242,7 @@ const ActiveWorkoutScreen = () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
   }, [isTimerRunning]);
-  
+
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       handleExitWorkout();
@@ -251,7 +261,7 @@ const ActiveWorkoutScreen = () => {
       case WorkoutPhase.RESTING:
         return '#3B82F6'; // Blue
       case WorkoutPhase.PAUSED:
-        return '#A0A5B1'; // Grey
+        return '#4B5563'; // Gray for paused
       default:
         return '#01D38D';
     }
@@ -350,6 +360,18 @@ const ActiveWorkoutScreen = () => {
         exercise={currentExercise}
         visible={isInfoModalVisible}
         onClose={() => setIsInfoModalVisible(false)}
+      />
+      <CustomAlert
+        visible={alertInfo.visible}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+        iconName={alertInfo.iconName}
+        iconColor={alertInfo.iconColor}
+        onClose={() => {
+            setAlertInfo(prev => ({ ...prev, visible: false }));
+            handlePlayPress(); // Resume if the alert is closed by tapping outside
+        }}
       />
       <ImageBackground
         source={{ uri: currentExercise.imageUrl }}

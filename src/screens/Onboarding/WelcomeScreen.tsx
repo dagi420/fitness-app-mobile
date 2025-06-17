@@ -28,7 +28,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
           <View style={styles.contentContainer}>
             <View style={styles.textContainer}>
               <Text style={styles.title}>
-                Meet Your Coach
+                Start Your Healthy Jorney
               </Text>
               <Text style={styles.subtitle}>
                 Start your journey with a personalized plan to help you reach your goals.

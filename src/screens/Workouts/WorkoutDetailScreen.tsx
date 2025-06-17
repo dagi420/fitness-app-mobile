@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -12,9 +12,11 @@ import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { WorkoutsStackParamList } from '../../navigation/types';
 import { PlannedExercise } from '../Planner/ManualPlanCreatorScreen';
-import { UserWorkoutPlan } from '../../api/planService';
+import { UserWorkoutPlan, deleteUserWorkoutPlan } from '../../api/planService';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../../store/AuthContext';
+import CustomAlert from '../../components/CustomAlert';
 
 type WorkoutDetailScreenRouteProp = RouteProp<WorkoutsStackParamList, 'WorkoutDetail'>;
 type WorkoutDetailScreenNavigationProp = StackNavigationProp<WorkoutsStackParamList, 'WorkoutDetail'>;
@@ -45,8 +47,50 @@ const WorkoutDetailScreen = () => {
   const navigation = useNavigation<WorkoutDetailScreenNavigationProp>();
   const route = useRoute<WorkoutDetailScreenRouteProp>();
   const insets = useSafeAreaInsets();
+  const { user, token } = useAuth();
+  const [alertInfo, setAlertInfo] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    buttons: any[];
+    iconName?: keyof typeof Ionicons.glyphMap;
+    iconColor?: string;
+  }>({ visible: false, title: '', message: '', buttons: [] });
 
   const workout = useMemo(() => route.params.workout, [route.params.workout]);
+
+  const showAlert = (title: string, message: string, buttons: any[], iconName?: keyof typeof Ionicons.glyphMap, iconColor?: string) => {
+    setAlertInfo({ visible: true, title, message, buttons, iconName, iconColor });
+  };
+
+  const handleDelete = async () => {
+    if (!workout || !token) {
+      showAlert('Error', 'Could not delete plan. Authentication missing.', [{ text: 'OK' }], 'alert-circle-outline', '#FF6B6B');
+      return;
+    }
+
+    showAlert(
+      'Delete Plan',
+      `Are you sure you want to delete "${workout.planName}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', type: 'cancel' },
+        { text: 'Delete', type: 'destructive', onPress: async () => {
+          try {
+            const response = await deleteUserWorkoutPlan(token, workout._id);
+            if (response.success) {
+              showAlert('Success', 'Workout plan deleted successfully.', [{ text: 'OK', onPress: () => navigation.goBack() }], 'checkmark-circle-outline', '#01D38D');
+            } else {
+              showAlert('Error', response.message || 'Failed to delete the plan.', [{ text: 'OK' }], 'close-circle-outline', '#FF6B6B');
+            }
+          } catch (error) {
+            showAlert('Error', 'An unexpected error occurred.', [{ text: 'OK' }], 'alert-circle-outline', '#FF6B6B');
+          }
+        }},
+      ],
+      'trash-outline',
+      '#FF6B6B'
+    );
+  };
 
   const handleStartWorkout = () => {
     if (!workout) return;
@@ -82,6 +126,9 @@ const WorkoutDetailScreen = () => {
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
             </TouchableOpacity>
+            <TouchableOpacity onPress={handleDelete} style={styles.deleteButton}>
+              <Ionicons name="trash-outline" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
             <View style={styles.headerContent}>
               <Text style={styles.planTitle}>{workout.planName}</Text>
               <View style={styles.metaContainer}>
@@ -116,6 +163,15 @@ const WorkoutDetailScreen = () => {
           <Ionicons name="play-circle" size={24} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
+      <CustomAlert
+        visible={alertInfo.visible}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+        iconName={alertInfo.iconName}
+        iconColor={alertInfo.iconColor}
+        onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 };
@@ -140,6 +196,15 @@ const styles = StyleSheet.create({
     top: 50, // Adjust as needed based on safe area
     left: 25,
     zIndex: 10,
+  },
+  deleteButton: {
+    position: 'absolute',
+    top: 50, // Adjust as needed based on safe area
+    right: 25,
+    zIndex: 10,
+    padding: 8,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 20,
   },
   headerContent: {
     alignSelf: 'flex-end',

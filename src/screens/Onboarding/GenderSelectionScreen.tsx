@@ -16,6 +16,8 @@ import { useAuth } from '../../store/AuthContext';
 import { updateUserProfileOnboarding, OnboardingProfileData } from '../../api/authService';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import CustomAlert from '../../components/CustomAlert';
+import { CommonActions } from '@react-navigation/native';
 
 type GenderSelectionScreenNavigationProp = StackNavigationProp<RootStackParamList, 'GenderSelection'>;
 
@@ -26,17 +28,55 @@ interface GenderSelectionScreenProps {
 const { height } = Dimensions.get('window');
 
 const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({ navigation }) => {
-  const { user, token, updateUserInContext } = useAuth();
+  const { user, token, updateUserInContext, isAuthenticated } = useAuth();
   const [selectedGender, setSelectedGender] = useState<string | null>(user?.profile?.gender || null);
   const [isLoading, setIsLoading] = useState(false);
+  const [alertInfo, setAlertInfo] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    buttons: any[];
+    iconName?: keyof typeof Ionicons.glyphMap;
+  }>({ visible: false, title: '', message: '', buttons: [] });
+
+  // Check if this is profile editing (user already authenticated and has profile) or initial onboarding
+  const isProfileEditing = isAuthenticated && !!user?.profile?.gender;
+
+  const showAlert = (title: string, message: string, iconName?: keyof typeof Ionicons.glyphMap) => {
+    setAlertInfo({
+      visible: true,
+      title,
+      message,
+      buttons: [{ text: 'OK', onPress: () => {} }],
+      iconName,
+    });
+  };
+
+  const handleBackPress = () => {
+    if (isProfileEditing) {
+      // If editing profile, go back to profile
+      navigation.goBack();
+    } else if (navigation.canGoBack()) {
+      // If there's a previous screen, go back
+      navigation.goBack();
+    } else {
+      // If no previous screen (first time onboarding), go to Welcome
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Welcome' }],
+        })
+      );
+    }
+  };
 
   const handleContinue = async () => {
     if (!selectedGender) {
-      Alert.alert('Select an option', 'Please select a gender to continue.');
+      showAlert('Selection Required', 'Please select a gender to continue.', 'alert-circle-outline');
       return;
     }
     if (!user || !token) {
-      Alert.alert('Authentication Error', 'You must be logged in to continue.');
+      showAlert('Authentication Error', 'You must be logged in to continue.', 'alert-circle-outline');
       return;
     }
     setIsLoading(true);
@@ -47,10 +87,10 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({ navigatio
         await updateUserInContext(response.user);
         navigation.navigate('GoalSelection');
       } else {
-        Alert.alert('Update Failed', response.message || 'Could not save your selection.');
+        showAlert('Update Failed', response.message || 'Could not save your selection.', 'close-circle-outline');
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred.');
+      showAlert('Error', 'An unexpected error occurred. Please try again.', 'alert-circle-outline');
     } finally {
       setIsLoading(false);
     }
@@ -100,7 +140,7 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({ navigatio
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+      <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
         <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
       </TouchableOpacity>
       
@@ -114,13 +154,13 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({ navigatio
           label="Male"
           value="male"
           iconName="male"
-          imageUrl="https://images.unsplash.com/photo-1548690312-e3b511d48c8e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=687&q=80"
+          imageUrl="https://images.pexels.com/photos/1431282/pexels-photo-1431282.jpeg?cs=srgb&dl=pexels-anush-1431282.jpg&fm=jpg"
         />
         <GenderOption
           label="Female"
           value="female"
           iconName="female"
-          imageUrl="https://images.unsplash.com/photo-1534528741775-53994a69daeb?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=764&q=80"
+          imageUrl="https://i.pinimg.com/736x/91/e2/c1/91e2c1474ea2447b12db1ae44b2464e4.jpg"
         />
       </View>
 
@@ -133,6 +173,15 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({ navigatio
           {isLoading ? <ActivityIndicator color="#191E29" /> : <Text style={styles.nextButtonText}>Next</Text>}
         </TouchableOpacity>
       </View>
+      <CustomAlert
+        visible={alertInfo.visible}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+        iconName={alertInfo.iconName}
+        iconColor={alertInfo.iconName?.includes('alert') || alertInfo.iconName?.includes('close') ? '#FF6B6B' : '#01D38D'}
+        onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 };

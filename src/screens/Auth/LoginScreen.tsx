@@ -1,5 +1,17 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, StatusBar } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TextInput, 
+  TouchableOpacity, 
+  StatusBar, 
+  KeyboardAvoidingView, 
+  Platform, 
+  ScrollView,
+  Animated,
+  Dimensions
+} from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation/types';
 import { loginUser } from '../../api/authService';
@@ -14,11 +26,26 @@ interface LoginScreenProps {
   navigation: LoginScreenNavigationProp;
 }
 
+const { width, height } = Dimensions.get('window');
+
 const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  
   const { login: loginToContext } = useAuth();
+  
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const buttonScaleAnim = useRef(new Animated.Value(1)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  
   const [alertInfo, setAlertInfo] = useState<{
     visible: boolean;
     title: string;
@@ -26,6 +53,74 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     buttons: any[];
     iconName?: keyof typeof Ionicons.glyphMap;
   }>({ visible: false, title: '', message: '', buttons: [] });
+
+  useEffect(() => {
+    // Entrance animation
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) {
+      setEmailError('Email is required');
+      return false;
+    } else if (!emailRegex.test(email)) {
+      setEmailError('Please enter a valid email address');
+      return false;
+    } else {
+      setEmailError('');
+      return true;
+    }
+  };
+
+  const validatePassword = (password: string) => {
+    if (!password) {
+      setPasswordError('Password is required');
+      return false;
+    } else if (password.length < 6) {
+      setPasswordError('Password must be at least 6 characters');
+      return false;
+    } else {
+      setPasswordError('');
+      return true;
+    }
+  };
+
+  const shakeAnimation = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnim, {
+        toValue: 10,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: -10,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 10,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 0,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
 
   const showAlert = (title: string, message: string, iconName?: keyof typeof Ionicons.glyphMap) => {
     setAlertInfo({
@@ -38,10 +133,28 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   };
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      showAlert('Login Error', 'Please enter both email and password.', 'alert-circle-outline');
+    const isEmailValid = validateEmail(email);
+    const isPasswordValid = validatePassword(password);
+    
+    if (!isEmailValid || !isPasswordValid) {
+      shakeAnimation();
       return;
     }
+
+    // Button press animation
+    Animated.sequence([
+      Animated.timing(buttonScaleAnim, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonScaleAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
     setIsLoading(true);
     try {
       const response = await loginUser({ email, password });
@@ -49,74 +162,227 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         await loginToContext(response.user, response.token);
         
         if (response.user.profile && response.user.profile.gender) {
-            navigation.replace('MainApp');
+          navigation.replace('MainApp');
         } else {
-            navigation.replace('GenderSelection');
+          navigation.replace('GenderSelection');
         }
-
       } else {
-        showAlert('Login Failed', response.message || 'Invalid credentials or server error.', 'close-circle-outline');
+        showAlert('Login Failed', response.message || 'Invalid credentials. Please check your email and password.', 'close-circle-outline');
+        shakeAnimation();
       }
     } catch (error) {
-      showAlert('Error', 'An unexpected error occurred. Please try again.', 'alert-circle-outline');
+      showAlert('Connection Error', 'Unable to connect to our servers. Please check your internet connection and try again.', 'wifi-outline');
       console.error('Login screen error:', error);
     }
     setIsLoading(false);
   };
 
+  const handleEmailChange = (text: string) => {
+    setEmail(text);
+    if (emailError && text) {
+      validateEmail(text);
+    }
+  };
+
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    if (passwordError && text) {
+      validatePassword(text);
+    }
+  };
+
   return (
-    <LinearGradient
-      colors={['#191E29', '#132D46']}
-      style={styles.container}
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      <StatusBar barStyle="light-content" backgroundColor="#191E29" />
-      
-      <View style={styles.content}>
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Sign in to your account</Text>
+      <LinearGradient
+        colors={['#191E29', '#132D46', '#0A1628']}
+        style={styles.gradient}
+      >
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         
-        <View style={styles.formContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#696E79"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#696E79"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
-          
-          <TouchableOpacity 
-            style={[styles.button, isLoading && styles.buttonDisabled]} 
-            onPress={handleLogin}
-            disabled={isLoading}
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header with Back Button */}
+          <Animated.View 
+            style={[
+              styles.header,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }]
+              }
+            ]}
           >
-            <Text style={styles.buttonText}>{isLoading ? 'Signing in...' : 'Sign In'}</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.forgotPasswordButton}
-            onPress={() => navigation.navigate('ForgotPassword')}
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Sign In</Text>
+            <View style={styles.headerSpacer} />
+          </Animated.View>
+
+          {/* Main Content */}
+          <Animated.View 
+            style={[
+              styles.content,
+              {
+                opacity: fadeAnim,
+                transform: [
+                  { translateY: slideAnim },
+                  { translateX: shakeAnim }
+                ]
+              }
+            ]}
           >
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
-        </View>
-        
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account? </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
-            <Text style={styles.linkText}>Sign Up</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+            <View style={styles.titleContainer}>
+              <Text style={styles.title}>Welcome Back!</Text>
+              <Text style={styles.subtitle}>
+                Continue your fitness journey by signing in to your account
+              </Text>
+            </View>
+            
+            <View style={styles.formContainer}>
+              {/* Email Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Email Address</Text>
+                <View style={[
+                  styles.inputWrapper,
+                  emailFocused && styles.inputWrapperFocused,
+                  emailError && styles.inputWrapperError
+                ]}>
+                  <Ionicons 
+                    name="mail-outline" 
+                    size={20} 
+                    color={emailFocused ? '#01D38D' : '#696E79'} 
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter your email"
+                    placeholderTextColor="#696E79"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={email}
+                    onChangeText={handleEmailChange}
+                    onFocus={() => setEmailFocused(true)}
+                    onBlur={() => {
+                      setEmailFocused(false);
+                      validateEmail(email);
+                    }}
+                  />
+                </View>
+                {emailError ? (
+                  <Animated.Text style={styles.errorText}>
+                    {emailError}
+                  </Animated.Text>
+                ) : null}
+              </View>
+
+              {/* Password Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Password</Text>
+                <View style={[
+                  styles.inputWrapper,
+                  passwordFocused && styles.inputWrapperFocused,
+                  passwordError && styles.inputWrapperError
+                ]}>
+                  <Ionicons 
+                    name="lock-closed-outline" 
+                    size={20} 
+                    color={passwordFocused ? '#01D38D' : '#696E79'} 
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter your password"
+                    placeholderTextColor="#696E79"
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={handlePasswordChange}
+                    onFocus={() => setPasswordFocused(true)}
+                    onBlur={() => {
+                      setPasswordFocused(false);
+                      validatePassword(password);
+                    }}
+                  />
+                  <TouchableOpacity
+                    style={styles.passwordToggle}
+                    onPress={() => setShowPassword(!showPassword)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons 
+                      name={showPassword ? "eye-outline" : "eye-off-outline"} 
+                      size={20} 
+                      color="#696E79" 
+                    />
+                  </TouchableOpacity>
+                </View>
+                {passwordError ? (
+                  <Animated.Text style={styles.errorText}>
+                    {passwordError}
+                  </Animated.Text>
+                ) : null}
+              </View>
+
+              {/* Forgot Password */}
+              <TouchableOpacity 
+                style={styles.forgotPasswordButton}
+                onPress={() => navigation.navigate('ForgotPassword')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot your password?</Text>
+              </TouchableOpacity>
+              
+              {/* Login Button */}
+              <Animated.View style={{ transform: [{ scale: buttonScaleAnim }] }}>
+                <TouchableOpacity 
+                  style={[styles.loginButton, isLoading && styles.buttonDisabled]} 
+                  onPress={handleLogin}
+                  disabled={isLoading}
+                  activeOpacity={0.9}
+                >
+                  <LinearGradient
+                    colors={isLoading ? ['#666', '#555'] : ['#01D38D', '#00B377']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.gradientButton}
+                  >
+                    {isLoading ? (
+                      <View style={styles.loadingContainer}>
+                        <Animated.View style={styles.loadingDot} />
+                        <Text style={styles.buttonText}>Signing In...</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.buttonText}>Sign In</Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Animated.View>
+            </View>
+            
+            {/* Footer */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>New to FitnessApp? </Text>
+              <TouchableOpacity 
+                onPress={() => navigation.navigate('Signup')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.linkText}>Create Account</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </ScrollView>
+      </LinearGradient>
+
       <CustomAlert
         visible={alertInfo.visible}
         title={alertInfo.title}
@@ -126,7 +392,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         iconColor={'#FF6B6B'}
         onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
       />
-    </LinearGradient>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -134,71 +400,159 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  gradient: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  headerSpacer: {
+    width: 44,
+  },
   content: {
     flex: 1,
-    justifyContent: 'center',
     paddingHorizontal: 32,
+    paddingTop: 20,
+  },
+  titleContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#FFFFFF',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
-    color: '#696E79',
+    color: '#B8C0CC',
     textAlign: 'center',
-    marginBottom: 40,
+    lineHeight: 24,
+    paddingHorizontal: 20,
   },
   formContainer: {
     marginBottom: 40,
   },
-  input: {
-    width: '100%',
-    height: 56,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    marginBottom: 16,
+  inputContainer: {
+    marginBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 16,
+    height: 56,
+  },
+  inputWrapperFocused: {
+    borderColor: '#01D38D',
+    backgroundColor: 'rgba(1, 211, 141, 0.1)',
+  },
+  inputWrapperError: {
+    borderColor: '#FF6B6B',
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
     color: '#FFFFFF',
     fontSize: 16,
+    fontWeight: '400',
   },
-  button: {
-    width: '100%',
-    height: 56,
-    backgroundColor: '#01D38D',
-    justifyContent: 'center',
-    alignItems: 'center',
+  passwordToggle: {
+    padding: 8,
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 12,
+    marginTop: 6,
+    marginLeft: 4,
+  },
+  forgotPasswordButton: {
+    alignSelf: 'flex-end',
+    marginBottom: 32,
+  },
+  forgotPasswordText: {
+    color: '#01D38D',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  loginButton: {
     borderRadius: 28,
-    marginBottom: 16,
+    overflow: 'hidden',
+    shadowColor: '#01D38D',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   buttonDisabled: {
-    backgroundColor: 'rgba(1, 211, 141, 0.6)',
+    opacity: 0.7,
+  },
+  gradientButton: {
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  loadingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
+    marginRight: 12,
   },
   buttonText: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
   },
-  forgotPasswordButton: {
-    alignItems: 'center',
-  },
-  forgotPasswordText: {
-    color: '#01D38D',
-    fontSize: 16,
-    fontWeight: '600',
-  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingBottom: 40,
   },
   footerText: {
-    color: '#696E79',
+    color: '#B8C0CC',
     fontSize: 16,
   },
   linkText: {

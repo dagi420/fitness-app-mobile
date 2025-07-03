@@ -9,11 +9,12 @@ import {
   Dimensions,
   ImageBackground,
   StatusBar,
+  Image,
 } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { WorkoutsStackParamList } from '../../navigation/types';
-import { Exercise } from '../../api/exerciseService';
+import { Exercise, getExerciseImageUrl } from '../../api/exerciseService';
 import { Ionicons } from '@expo/vector-icons';
 import YoutubePlayer from 'react-native-youtube-iframe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,6 +38,39 @@ const DetailChip = ({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text
     </View>
 );
 
+const MediaGallery = ({ exercise }: { exercise: Exercise }) => {
+  if (!exercise.mediaUrls) return null;
+
+  const hasImages = exercise.mediaUrls.image || exercise.mediaUrls.thumbnail;
+  const hasGif = exercise.mediaUrls.gif;
+
+  if (!hasImages && !hasGif) return null;
+
+  return (
+    <View style={styles.mediaGallery}>
+      {hasImages && (
+        <View style={styles.imageContainer}>
+          <Text style={styles.mediaLabel}>Exercise Image</Text>
+          <Image 
+            source={{ uri: getExerciseImageUrl(exercise) }} 
+            style={styles.exerciseImage}
+            resizeMode="cover"
+          />
+        </View>
+      )}
+      {hasGif && (
+        <View style={styles.imageContainer}>
+          <Text style={styles.mediaLabel}>Exercise Animation</Text>
+          <Image 
+            source={{ uri: exercise.mediaUrls.gif }} 
+            style={styles.exerciseGif}
+            resizeMode="cover"
+          />
+        </View>
+      )}
+    </View>
+  );
+};
 
 const ExerciseDetailScreen = () => {
   const route = useRoute<ExerciseDetailScreenRouteProp>();
@@ -102,7 +136,7 @@ const ExerciseDetailScreen = () => {
       <StatusBar barStyle="light-content" />
       <ScrollView>
         <ImageBackground
-          source={{ uri: exercise.imageUrl || 'https://via.placeholder.com/400x300' }}
+          source={{ uri: getExerciseImageUrl(exercise) }}
           style={[styles.header, { paddingTop: insets.top }]}
         >
           <View style={styles.headerOverlay}>
@@ -125,6 +159,9 @@ const ExerciseDetailScreen = () => {
           {renderSection("Target Muscle Groups", muscleGroupsContent)}
           
           {renderSection("Equipment Needed", equipmentContent)}
+
+          {/* Media Gallery Section */}
+          
 
           {videoId && renderSection("Video Guide", (
             <View style={styles.videoContainer}>
@@ -186,6 +223,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 10,
   },
   contentContainer: {
+
     padding: 20,
     paddingTop: 10,
     marginTop: -20,
@@ -203,13 +241,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1E2328',
-    borderRadius: 20,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    paddingHorizontal: 15,
+    borderRadius: 20,
+    gap: 6,
   },
   chipText: {
     color: '#FFFFFF',
-    marginLeft: 8,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -217,19 +255,58 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
   sectionTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
     color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: 'bold',
     marginBottom: 15,
   },
   bodyText: {
-    fontSize: 16,
     color: '#A0A5B1',
+    fontSize: 16,
     lineHeight: 24,
   },
-  videoContainer: {
+  tagContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tag: {
+    backgroundColor: '#2A2D32',
+    color: '#01D38D',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  mediaGallery: {
+    gap: 15,
+  },
+  imageContainer: {
+    backgroundColor: '#1E2328',
     borderRadius: 15,
-    overflow: 'hidden',
+    padding: 15,
+  },
+  mediaLabel: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  exerciseImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 10,
+  },
+  exerciseGif: {
+    width: '100%',
+    height: 200,
+    borderRadius: 10,
+  },
+  videoContainer: {
+    backgroundColor: '#1E2328',
+    borderRadius: 15,
+    padding: 15,
   },
   instructionItem: {
     flexDirection: 'row',
@@ -244,48 +321,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 15,
+    marginTop: 2,
   },
   instructionNumber: {
     color: '#191E29',
+    fontSize: 14,
     fontWeight: 'bold',
-    fontSize: 16,
   },
   instructionText: {
     flex: 1,
-    color: '#E0E0E0',
+    color: '#A0A5B1',
     fontSize: 16,
-    lineHeight: 24,
+    lineHeight: 22,
   },
   bulletItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   bulletIcon: {
-    marginRight: 10,
+    marginRight: 12,
     marginTop: 2,
   },
   bulletText: {
     flex: 1,
-    color: '#E0E0E0',
+    color: '#A0A5B1',
     fontSize: 16,
-    lineHeight: 24,
+    lineHeight: 22,
   },
-  tagContainer: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 10,
-  },
-  tag: {
-      backgroundColor: '#1E2328',
-      color: '#A0A5B1',
-      paddingVertical: 8,
-      paddingHorizontal: 15,
-      borderRadius: 20,
-      fontSize: 14,
-      fontWeight: '500',
-      overflow: 'hidden', // for rounded corners on iOS
-  }
 });
 
 export default ExerciseDetailScreen; 

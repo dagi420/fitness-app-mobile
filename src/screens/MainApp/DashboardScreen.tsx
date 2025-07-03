@@ -156,8 +156,8 @@ const DashboardScreen = () => {
   const isFemale = user?.profile?.gender === 'female';
 
   const headerImage = isFemale
-    ? 'https://st3.depositphotos.com/2389277/16160/i/450/depositphotos_161607422-stock-photo-muscular-man-doing-heavy-weight.jpg'
-    : 'https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?fit=crop&w=1200&q=80';
+    ? 'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?fm=jpg&q=60&w=3000&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8d29tYW4lMjB3b3Jrb3V0fGVufDB8fDB8fHww'
+    : 'https://st3.depositphotos.com/2389277/16160/i/450/depositphotos_161607422-stock-photo-muscular-man-doing-heavy-weight.jpg';
   
   const planImage = 'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?fit=crop&w=1200&q=80';
 

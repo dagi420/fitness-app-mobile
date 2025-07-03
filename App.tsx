@@ -1,9 +1,9 @@
 import './src/global.css';
 import React from 'react';
 import AppNavigator from './src/navigation/AppNavigator';
-import { GestureHandlerRootView } from 'react-native-gesture-handler'; // Import for gesture handler
-import { AuthProvider } from './src/store/AuthContext'; // Import AuthProvider
-import { ThemeProvider } from './src/styles/ThemeProvider'; // Import ThemeProvider
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { AuthProvider } from './src/store/AuthContext';
+import { ThemeProvider } from './src/styles/ThemeProvider';
 
 export default function App() {
   return (

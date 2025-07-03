@@ -1,34 +1,71 @@
 {
   "expo": {
-    "name": "fitness-app-mobile",
-    "slug": "fitness-app-mobile",
+    "name": "DubDub Fitness",
+    "slug": "fitness-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "main": "index.js",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#191E29"
     },
+    "assetBundlePatterns": [
+      "assets/*",
+      "src/assets/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dubdub.fitnessapp"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#191E29"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.dubdub.fitnessapp",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-font",
-      "expo-video"
-    ]
+      "expo-video",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you add progress pictures.",
+          "cameraPermission": "The app accesses your camera to let you take progress pictures."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "4adcff56-43c1-432a-8fe2-e6d369aed303"
+      }
+    },
+    "owner": "dagi34345",
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    }
   }
 }

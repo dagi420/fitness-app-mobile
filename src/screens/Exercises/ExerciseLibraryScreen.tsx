@@ -15,7 +15,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { WorkoutsStackParamList } from '../../navigation/types';
-import { Exercise, fetchAllExercises } from '../../api/exerciseService';
+import { Exercise, fetchAllExercises, getExerciseThumbnailUrl } from '../../api/exerciseService';
 import { useAuth } from '../../store/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,7 +27,15 @@ const MUSCLE_GROUPS = [
 ];
 const DIFFICULTIES = ['All', 'Beginner', 'Intermediate', 'Advanced'];
 
-const FilterModal = ({
+interface FilterModalProps {
+  visible: boolean;
+  onClose: () => void;
+  applyFilters: (filters: { muscleGroup: string; difficulty: string; equipment: string }) => void;
+  initialFilters: { muscleGroup: string; difficulty: string; equipment: string };
+  equipmentList: string[];
+}
+
+const FilterModal: React.FC<FilterModalProps> = ({
   visible,
   onClose,
   applyFilters,
@@ -57,11 +65,11 @@ const FilterModal = ({
     onClose();
   };
 
-  const renderFilterSection = (title, items, selected, setSelected) => (
+  const renderFilterSection = (title: string, items: string[], selected: string, setSelected: (value: string) => void) => (
     <View style={styles.filterSection}>
       <Text style={styles.filterTitle}>{title}</Text>
       <View style={styles.filterOptionsContainer}>
-        {items.map(item => (
+        {items.map((item: string) => (
           <TouchableOpacity
             key={item}
             style={[styles.filterChip, selected === item && styles.filterChipActive]}
@@ -112,16 +120,32 @@ const FilterModal = ({
 
 const ExerciseCard = ({ item, onPress }: { item: Exercise; onPress: () => void }) => (
   <TouchableOpacity style={styles.card} onPress={onPress}>
-    <Image source={{ uri: item.imageUrl || 'https://via.placeholder.com/150' }} style={styles.cardImage} />
+    <Image 
+      source={{ uri: getExerciseThumbnailUrl(item) }} 
+      style={styles.cardImage} 
+      resizeMode="cover"
+    />
     <View style={styles.cardContent}>
       <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
       <Text style={styles.cardSubtitle}>{item.category || 'N/A'}</Text>
+      <View style={styles.cardFooter}>
+        <View style={styles.difficultyBadge}>
+          <Ionicons name="pulse-outline" size={12} color="#01D38D" />
+          <Text style={styles.difficultyText}>{item.difficulty || 'N/A'}</Text>
+        </View>
+        {item.mediaUrls?.gif && (
+          <View style={styles.gifBadge}>
+            <Ionicons name="play-circle-outline" size={12} color="#FF6B6B" />
+            <Text style={styles.gifText}>GIF</Text>
+          </View>
+        )}
+      </View>
     </View>
     <Ionicons name="chevron-forward" size={24} color="#696E79" />
   </TouchableOpacity>
 );
 
-const EmptyState = ({ onRefresh }) => (
+const EmptyState = ({ onRefresh }: { onRefresh: () => void }) => (
     <View style={styles.emptyContainer}>
         <Ionicons name="sad-outline" size={80} color="#696E79" />
         <Text style={styles.emptyTitle}>No Exercises Found</Text>
@@ -154,9 +178,9 @@ const ExerciseLibraryScreen = () => {
   
   const equipmentList = useMemo(() => {
       const allEquipment = new Set<string>();
-      exercises.forEach(ex => {
+      exercises.forEach((ex: Exercise) => {
           if(ex.equipmentNeeded) {
-            ex.equipmentNeeded.forEach(eq => allEquipment.add(eq));
+            ex.equipmentNeeded.forEach((eq: string) => allEquipment.add(eq));
           }
       });
       return Array.from(allEquipment).sort();
@@ -185,7 +209,7 @@ const ExerciseLibraryScreen = () => {
   }, [token]);
 
   const filteredExercises = useMemo(() => {
-    return exercises.filter(exercise => {
+    return exercises.filter((exercise: Exercise) => {
       const matchesMuscleGroup = filters.muscleGroup === 'All' || exercise.category === filters.muscleGroup;
       const matchesDifficulty = filters.difficulty === 'All' || exercise.difficulty === filters.difficulty;
       const matchesEquipment = filters.equipment === 'All' || (exercise.equipmentNeeded && exercise.equipmentNeeded.includes(filters.equipment));
@@ -259,13 +283,13 @@ const ExerciseLibraryScreen = () => {
 
       <FlatList
         data={filteredExercises}
-        renderItem={({ item }) => (
+        renderItem={({ item }: { item: Exercise }) => (
           <ExerciseCard
             item={item}
             onPress={() => navigation.navigate('ExerciseDetail', { exercise: item })}
           />
         )}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item: Exercise) => item._id}
         contentContainerStyle={styles.listContentContainer}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={<EmptyState onRefresh={loadExercises} />}
@@ -393,6 +417,39 @@ const styles = StyleSheet.create({
     color: '#A0A5B1',
     fontSize: 14,
     marginTop: 4,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  difficultyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#01D38D20',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 15,
+    marginRight: 10,
+  },
+  difficultyText: {
+    color: '#01D38D',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  gifBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF6B6B20',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 15,
+    marginLeft: 10,
+  },
+  gifText: {
+    color: '#FF6B6B',
+    fontSize: 12,
+    fontWeight: '600',
   },
   errorContainer: {
     padding: 20,

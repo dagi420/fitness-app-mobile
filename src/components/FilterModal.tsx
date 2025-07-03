@@ -10,7 +10,17 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const FilterModal = ({
+interface FilterModalProps {
+  visible: boolean;
+  onClose: () => void;
+  applyFilters: (filters: { muscleGroup: string; difficulty: string; equipment: string }) => void;
+  initialFilters: { muscleGroup: string; difficulty: string; equipment: string };
+  equipmentList: string[];
+  muscleGroups: string[];
+  difficulties: string[];
+}
+
+const FilterModal: React.FC<FilterModalProps> = ({
   visible,
   onClose,
   applyFilters,
@@ -42,11 +52,16 @@ const FilterModal = ({
     onClose();
   };
 
-  const renderFilterSection = (title, items, selected, setSelected) => (
+  const renderFilterSection = (
+    title: string, 
+    items: string[], 
+    selected: string, 
+    setSelected: (value: string) => void
+  ) => (
     <View style={styles.filterSection}>
       <Text style={styles.filterTitle}>{title}</Text>
       <View style={styles.filterOptionsContainer}>
-        {items.map(item => (
+        {items.map((item: string) => (
           <TouchableOpacity
             key={item}
             style={[styles.filterChip, selected === item && styles.filterChipActive]}

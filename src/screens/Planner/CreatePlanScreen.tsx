@@ -19,7 +19,6 @@ import { generateAIWorkoutPlan } from '../../api/workoutService';
 import { generateAIDietPlan } from '../../api/dietService';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import CustomAlert from '../../components/CustomAlert';
 
 type CreatePlanScreenNavigationProp = StackNavigationProp<RootStackParamList, 'CreatePlan'>;
 
@@ -52,22 +51,10 @@ const CreatePlanScreen = () => {
   const { user, token } = useAuth();
   const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
   const [isGeneratingDiet, setIsGeneratingDiet] = useState(false);
-  const [alertInfo, setAlertInfo] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    buttons: any[];
-    iconName?: keyof typeof Ionicons.glyphMap;
-    iconColor?: string;
-  }>({ visible: false, title: '', message: '', buttons: [] });
-
-  const showAlert = (title: string, message: string, buttons: any[], iconName?: keyof typeof Ionicons.glyphMap, iconColor?: string) => {
-    setAlertInfo({ visible: true, title, message, buttons, iconName, iconColor });
-  };
 
   const handleAIWorkoutGenerate = () => {
     if (!user || !token) {
-      showAlert('Authentication Error', 'User not authenticated.', [{ text: 'OK', onPress: () => {} }], 'alert-circle-outline', '#FF6B6B');
+      Alert.alert('Authentication Error', 'User not authenticated.');
       return;
     }
     navigation.navigate('AIWorkoutConfigurationScreen', {
@@ -76,12 +63,13 @@ const CreatePlanScreen = () => {
         try {
           const response = await generateAIWorkoutPlan(token, config);
           if (response.success && response.plan) {
-            showAlert('Success', 'AI workout plan generated successfully!', [{ text: 'Great!', onPress: () => navigation.navigate('MainApp', { screen: 'Workouts', params: { screen: 'WorkoutList' } }) }], 'checkmark-circle-outline', '#01D38D');
+            Alert.alert('Success', 'AI workout plan generated successfully!');
+            navigation.navigate('MainApp', { screen: 'Workouts', params: { screen: 'WorkoutList' } });
           } else {
-            showAlert('Error', response.message || 'Failed to generate AI workout plan.', [{ text: 'OK', onPress: () => {} }], 'close-circle-outline', '#FF6B6B');
+            Alert.alert('Error', response.message || 'Failed to generate AI workout plan.');
           }
         } catch (apiError) {
-          showAlert('Error', apiError instanceof Error ? apiError.message : 'An unexpected error occurred.', [{ text: 'OK', onPress: () => {} }], 'alert-circle-outline', '#FF6B6B');
+          Alert.alert('Error', apiError instanceof Error ? apiError.message : 'An unexpected error occurred.');
         } finally {
           setIsGeneratingWorkout(false);
         }
@@ -95,7 +83,7 @@ const CreatePlanScreen = () => {
   
   const handleAIDietGenerate = () => {
     if (!user || !token) {
-      showAlert("Authentication Error", "User not authenticated.", [{ text: 'OK', onPress: () => {} }], 'alert-circle-outline', '#FF6B6B');
+      Alert.alert("Authentication Error", "User not authenticated.");
       return;
     }
     navigation.navigate('AIConfigurationScreen', {
@@ -104,12 +92,13 @@ const CreatePlanScreen = () => {
         try {
           const response = await generateAIDietPlan(token, config);
           if (response.success && response.plan) {
-            showAlert("Success", "AI diet plan generated successfully!", [{ text: 'Great!', onPress: () => navigation.navigate('MainApp', { screen: 'Diet', params: { refresh: true } as any }) }], 'checkmark-circle-outline', '#01D38D');
+            Alert.alert("Success", "AI diet plan generated successfully!");
+            navigation.navigate('MainApp', { screen: 'Diet', params: { refresh: true } as any });
           } else {
-            showAlert("Error", response.message || "Failed to generate AI diet plan.", [{ text: 'OK', onPress: () => {} }], 'close-circle-outline', '#FF6B6B');
+            Alert.alert("Error", response.message || "Failed to generate AI diet plan.");
           }
         } catch (apiError) {
-          showAlert("Error", apiError instanceof Error ? apiError.message : "An unexpected error occurred.", [{ text: 'OK', onPress: () => {} }], 'alert-circle-outline', '#FF6B6B');
+          Alert.alert("Error", apiError instanceof Error ? apiError.message : "An unexpected error occurred.");
         } finally {
           setIsGeneratingDiet(false);
         }
@@ -158,15 +147,6 @@ const CreatePlanScreen = () => {
           isLoading={isGeneratingDiet}
         />
       </ScrollView>
-       <CustomAlert
-        visible={alertInfo.visible}
-        title={alertInfo.title}
-        message={alertInfo.message}
-        buttons={alertInfo.buttons}
-        iconName={alertInfo.iconName}
-        iconColor={alertInfo.iconColor}
-        onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
-      />
     </SafeAreaView>
   );
 };

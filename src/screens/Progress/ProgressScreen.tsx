@@ -14,7 +14,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../../store/AuthContext';
 import { fetchUserProgressLogs, ProgressLog } from '../../api/progressService';
-import { LineChart } from 'react-native-chart-kit';
+import { SimpleLineChart } from '../../components/SimpleLineChart';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/types';
 import { Calendar, DateData } from 'react-native-calendars';
@@ -204,13 +204,13 @@ const ProgressScreen = () => {
             {weightData && (
                 <View style={styles.card}>
                     <Text style={styles.cardTitle}>Weight Trend</Text>
-                    <LineChart
+                    <SimpleLineChart
                         data={weightData}
                         width={width - 74} // container padding + card padding
                         height={220}
                         chartConfig={chartConfig}
-                        bezier
-                        style={styles.chart}
+                        withHorizontalLabels={true}
+                        withVerticalLabels={true}
                         withHorizontalLines={false}
                         withVerticalLines={false}
                     />
@@ -269,9 +269,18 @@ const ProgressScreen = () => {
   );
 };
 
-const StatCard = ({icon, label, value, change, unit, positiveIsBad }) => {
-    const isPositive = change > 0;
-    const isNegative = change < 0;
+interface StatCardProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  change: number | null | undefined;
+  unit: string;
+  positiveIsBad: boolean;
+}
+
+const StatCard = ({icon, label, value, change, unit, positiveIsBad }: StatCardProps) => {
+    const isPositive = change ? change > 0 : false;
+    const isNegative = change ? change < 0 : false;
     const changeText = change ? `${isPositive ? '+' : ''}${change.toFixed(1)} ${unit}` : `-`;
     
     let changeColor = '#A0A5B1'; // Neutral

@@ -1,7 +1,7 @@
 import { API_BASE_URL } from './apiConfig';
 import { FoodItem, Macronutrients } from './dietService'; // Reuse FoodItem and Macronutrients from dietService
 
-export { FoodItem, Macronutrients }; // Re-export for convenience
+export type { FoodItem, Macronutrients }; // Re-export for convenience
 
 interface SearchFoodItemsResponse {
   success: boolean;

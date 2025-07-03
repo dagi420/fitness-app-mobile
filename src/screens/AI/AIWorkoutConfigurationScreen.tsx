@@ -24,13 +24,11 @@ const AIWorkoutConfigurationScreen: React.FC<Props> = ({ navigation, route }) =>
   const [config, setConfig] = useState<AIWorkoutConfigData>({
     fitnessGoal: 'Muscle Gain', // Default value
     fitnessLevel: 'Intermediate', // Default value
-    gender: 'Male', // Default value
+    gender: 'male', // Default value
     workoutTypePreferences: 'Full Body', // Default, single string for now
     availableEquipment: ['Full Gym'], // Default as an array
     timePerSession: 60, // Default in minutes
     workoutsPerWeek: 3, // Default
-    targetMuscleGroups: '',
-    otherNotes: '',
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof AIWorkoutConfigData, string>>>({});
@@ -46,13 +44,13 @@ const AIWorkoutConfigurationScreen: React.FC<Props> = ({ navigation, route }) =>
       // However, to be safe, if it is, we assume value is already string[] or convert it
       // For the TextInput, we use setEquipmentInput directly.
       // For other Picker inputs, this function works as is.
-      setConfig(prev => ({ ...prev, [field]: value }));
+      setConfig((prev: AIWorkoutConfigData) => ({ ...prev, [field]: value }));
     } else {
-      setConfig(prev => ({ ...prev, [field]: value }));
+      setConfig((prev: AIWorkoutConfigData) => ({ ...prev, [field]: value }));
     }
 
     if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }));
+      setErrors((prev: Partial<Record<keyof AIWorkoutConfigData, string>>) => ({ ...prev, [field]: undefined }));
     }
   };
   
@@ -60,7 +58,7 @@ const AIWorkoutConfigurationScreen: React.FC<Props> = ({ navigation, route }) =>
   const handleEquipmentInputChange = (text: string) => {
     setEquipmentInput(text);
     if (errors.availableEquipment) {
-      setErrors(prev => ({ ...prev, availableEquipment: undefined }));
+      setErrors((prev: Partial<Record<keyof AIWorkoutConfigData, string>>) => ({ ...prev, availableEquipment: undefined }));
     }
   };
 
@@ -72,7 +70,7 @@ const AIWorkoutConfigurationScreen: React.FC<Props> = ({ navigation, route }) =>
     if (!config.workoutTypePreferences) newErrors.workoutTypePreferences = 'Workout Type is required.';
     
     // Validate the equipmentInput string before parsing, or the parsed array
-    const equipmentArray = equipmentInput.split(',').map(e => e.trim()).filter(e => e);
+    const equipmentArray = equipmentInput.split(',').map((e: string) => e.trim()).filter((e: string) => e);
     if (equipmentArray.length === 0 && equipmentInput.trim() !== '') { // handles if only commas are entered
         newErrors.availableEquipment = 'Please provide valid, comma-separated equipment.';
     } else if (equipmentArray.length === 0 && equipmentInput.trim() === '') { // handles if input is empty
@@ -90,8 +88,8 @@ const AIWorkoutConfigurationScreen: React.FC<Props> = ({ navigation, route }) =>
     // Parse the equipmentInput string into an array
     const parsedEquipment = equipmentInput
       .split(',')
-      .map(e => e.trim())
-      .filter(e => e); // Remove empty strings
+      .map((e: string) => e.trim())
+      .filter((e: string) => e); // Remove empty strings
 
     const currentConfig: AIWorkoutConfigData = {
         ...config,
@@ -133,7 +131,7 @@ const AIWorkoutConfigurationScreen: React.FC<Props> = ({ navigation, route }) =>
         <View style={styles.pickerWrapper}>
           <Picker
             selectedValue={config.fitnessGoal}
-            onValueChange={(itemValue) => handleInputChange('fitnessGoal', itemValue)}
+            onValueChange={(itemValue: string) => handleInputChange('fitnessGoal', itemValue)}
             style={styles.picker}
             itemStyle={pickerItemStyle}
           >
@@ -153,7 +151,7 @@ const AIWorkoutConfigurationScreen: React.FC<Props> = ({ navigation, route }) =>
         <View style={styles.pickerWrapper}>
           <Picker
             selectedValue={config.fitnessLevel}
-            onValueChange={(itemValue) => handleInputChange('fitnessLevel', itemValue)}
+            onValueChange={(itemValue: string) => handleInputChange('fitnessLevel', itemValue)}
             style={styles.picker}
             itemStyle={pickerItemStyle}
           >
@@ -171,14 +169,14 @@ const AIWorkoutConfigurationScreen: React.FC<Props> = ({ navigation, route }) =>
         <View style={styles.pickerWrapper}>
           <Picker
             selectedValue={config.gender}
-            onValueChange={(itemValue) => handleInputChange('gender', itemValue)}
+            onValueChange={(itemValue: 'male' | 'female' | 'other' | 'not_specified') => handleInputChange('gender', itemValue)}
             style={styles.picker}
             itemStyle={pickerItemStyle}
           >
-            <Picker.Item label="Male" value="Male" />
-            <Picker.Item label="Female" value="Female" />
-            <Picker.Item label="Other" value="Other" />
-            <Picker.Item label="Prefer not to say" value="Prefer not to say" />
+            <Picker.Item label="Male" value="male" />
+            <Picker.Item label="Female" value="female" />
+            <Picker.Item label="Other" value="other" />
+            <Picker.Item label="Prefer not to say" value="not_specified" />
           </Picker>
         </View>
         {errors.gender && <Text style={styles.errorText}>{errors.gender}</Text>}
@@ -191,7 +189,7 @@ const AIWorkoutConfigurationScreen: React.FC<Props> = ({ navigation, route }) =>
         <TextInput
           style={styles.input}
           value={config.workoutTypePreferences}
-          onChangeText={(text) => handleInputChange('workoutTypePreferences', text)}
+          onChangeText={(text: string) => handleInputChange('workoutTypePreferences', text)}
           placeholder="Enter preferred workout types"
         />
         {errors.workoutTypePreferences && <Text style={styles.errorText}>{errors.workoutTypePreferences}</Text>}
@@ -216,7 +214,7 @@ const AIWorkoutConfigurationScreen: React.FC<Props> = ({ navigation, route }) =>
         <TextInput
           style={styles.input}
           value={String(config.timePerSession)}
-          onChangeText={(text) => handleInputChange('timePerSession', parseInt(text, 10) || 0)}
+          onChangeText={(text: string) => handleInputChange('timePerSession', parseInt(text, 10) || 0)}
           placeholder="e.g., 60"
           keyboardType="numeric"
         />
@@ -229,36 +227,11 @@ const AIWorkoutConfigurationScreen: React.FC<Props> = ({ navigation, route }) =>
         <TextInput
           style={styles.input}
           value={String(config.workoutsPerWeek)}
-          onChangeText={(text) => handleInputChange('workoutsPerWeek', parseInt(text, 10) || 0)}
+          onChangeText={(text: string) => handleInputChange('workoutsPerWeek', parseInt(text, 10) || 0)}
           placeholder="e.g., 3"
           keyboardType="numeric"
         />
         {errors.workoutsPerWeek && <Text style={styles.errorText}>{errors.workoutsPerWeek}</Text>}
-      </View>
-
-      {/* Target Muscle Groups (Optional) */}
-      <View style={styles.fieldContainer}>
-        <Text style={styles.label}>Target Muscle Groups (Optional)</Text>
-        <Text style={styles.inputHint}>E.g., Chest, Back, Legs, Core. Leave blank if none specific.</Text>
-        <TextInput
-          style={styles.input}
-          value={config.targetMuscleGroups}
-          onChangeText={(text) => handleInputChange('targetMuscleGroups', text)}
-          placeholder="List target muscle groups (comma-separated)"
-        />
-      </View>
-
-      {/* Other Notes (Optional) */}
-      <View style={styles.fieldContainer}>
-        <Text style={styles.label}>Other Notes/Restrictions (Optional)</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={config.otherNotes}
-          onChangeText={(text) => handleInputChange('otherNotes', text)}
-          placeholder="Any other preferences, injuries, or notes for the AI?"
-          multiline
-          numberOfLines={3}
-        />
       </View>
 
       <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
